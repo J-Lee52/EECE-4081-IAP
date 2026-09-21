@@ -66,7 +66,10 @@ so that I can evaluate the shots recorded during that session.
 •	When the session is stopped, the application stops accepting new shot detections for that session.
 •	The application changes the session state to Completed.
 •	The completed session displays all shots recorded during that session.
-•	The completed session displays the timestamp and applicable split time for each recorded shot.
+•	For each recorded shot, the application displays the shot number, timestamp, and applicable split time.
+• The completed session displays the fastest split time, average split time, and slowest split time when at least one valid split time exists.
+• The fastest, average, and slowest split times are calculated using only split times from the completed session.
+• If the completed session does not contain enough shots to produce a split time, the application indicates that split statistics are unavailable.
 •	Starting a new session does not alter the results of the completed session before the user chooses to continue.
 
 ### User Story 07 - Save and Review Previous Sessions
