@@ -1,0 +1,49 @@
+# ADR-001 — Separate Audio Acquisition from Shot Detection
+
+## Context
+
+The shot timer depends on live microphone input to identify potential shot events. This requires two different responsibilities: acquiring audio samples from the Android microphone and interpreting those samples to determine whether they represent a shot.
+
+A design decision was needed about whether these responsibilities should be implemented together or kept separate. Combining them could reduce the number of components in the application, but it would also couple shot-detection logic directly to Android microphone APIs and hardware behavior.
+
+The application architecture separates platform-specific functionality from application and domain behavior. Microphone access is platform-specific, while determining whether microphone input represents a likely shot is detection logic that should be testable independently of a physical microphone.
+
+The design must also support the configured detection threshold, shot-detection cooldown, filtering or suppression behavior, and future changes to the detection approach without requiring the rest of the application to depend directly on Android microphone APIs.
+
+## Decision
+
+The application separates microphone audio acquisition from shot-detection logic.
+
+AudioInput is responsible for acquiring live microphone samples through Android platform APIs and providing those samples through an abstraction.
+
+ShotDetector receives microphone samples from AudioInput, interprets them, applies the configured detection threshold and shot-detection cooldown, and emits likely shot events.
+
+ShotDetector does not directly access Android microphone APIs. Likewise, AudioInput does not determine whether captured microphone input represents a shot.
+
+This keeps platform-specific microphone access separate from the logic used to interpret audio.
+
+## Alternatives Considered
+
+### Alternative 1 — Combine Audio Acquisition and Shot Detection in One Android Audio Component
+
+A single Android-specific audio component could acquire microphone samples, analyze them, and emit shot events. This would reduce the number of classes and interfaces and make the initial implementation simpler.
+
+This alternative was not chosen because microphone acquisition and shot interpretation are different responsibilities. Combining them would tightly couple the detection logic to Android audio APIs and make the detector harder to test using controlled or recorded audio input. Changes to the Android microphone implementation could also affect the detection logic even when the shot-detection rules had not changed.
+
+### Alternative 2 — Handle Audio Acquisition and Shot Detection in TimerViewModel
+
+TimerViewModel could directly manage microphone access and apply the shot-detection logic while also exposing timer state and results to the Compose UI. This would place more of the session behavior in one component and reduce the number of separate collaborators.
+
+This alternative was not chosen because it would mix UI-facing state management with Android audio access and shot-detection behavior. TimerViewModel would become responsible for microphone lifecycle, audio processing, user actions, and presentation state. This would increase coupling and make the detection logic more difficult to test independently of the ViewModel.
+
+## Consequences
+
+Separating AudioInput from ShotDetector creates a clear boundary between acquiring audio and interpreting it. ShotDetector can be tested using controlled or recorded audio input without requiring access to an Android microphone. The Android-specific microphone implementation can also change without requiring the shot-detection rules to be rewritten, as long as it continues to satisfy the AudioInput abstraction.
+
+The separation also supports future changes to the detection algorithm. Threshold, cooldown, filtering, or other detection strategies can evolve inside ShotDetector without moving microphone-management responsibilities into the detection logic.
+
+However, this decision introduces additional architectural structure. The application now requires an AudioInput abstraction, an Android implementation of that abstraction, and dependency wiring between AudioInput, ShotDetector, and the component coordinating the timing workflow. This requires more code and setup than combining microphone capture and detection in one component.
+
+Changes to the format, buffering, or delivery of microphone samples may also require coordinated changes to both the AudioInput contract and ShotDetector. Debugging the complete audio path can require tracing behavior across more than one component rather than examining a single class.
+
+The abstraction may also make some device-specific microphone behavior harder to expose directly to ShotDetector. If a future detection technique requires Android-specific audio information that is not represented by the current AudioInput interface, the abstraction will need to be extended carefully without allowing platform-specific details to spread into the detection logic.
