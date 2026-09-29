@@ -1,0 +1,75 @@
+Copilot Chat's First Draft - Domain Model
+The following is Copilot chat's response to my prompt to generate a domain model from the requirements in REQUIREMENTS.md.
+
+Below is a domain model derived strictly from REQUIREMENTS.md.
+
+```mermaid
+classDiagram
+    class SessionSettings {
+        <<value object>>
+        +microphoneDetectionThreshold: double
+        +startDelayMode: StartDelayMode
+        +fixedDelay: Duration?
+        +minimumDelay: Duration?
+        +maximumDelay: Duration?
+        +shotDetectionCooldown: Duration
+    }
+
+    class StartDelayMode {
+        <<enumeration>>
+        Fixed
+        RandomRange
+    }
+
+    class SessionState {
+        <<enumeration>>
+        Idle
+        Preparing
+        WaitingForStart
+        Recording
+        Completed
+    }
+
+    class Session {
+        +state: SessionState
+        +sessionSettings: SessionSettings
+        +shots: List~Shot~
+        +results: SessionResults
+        +save()
+        +stop()
+    }
+
+    class Shot {
+        +shotNumber: int
+        +timestamp: Duration
+        +splitTime: Duration?
+    }
+
+    class SessionResults {
+        <<value object>>
+        +totalShots: int
+        +totalTime: Duration?
+        +fastestSplit: Duration?
+        +averageSplit: Duration?
+        +slowestSplit: Duration?
+        +splitStatisticsAvailable: boolean
+    }
+
+    class SessionHistory {
+        +savedSessions: List~Session~
+    }
+
+    SessionSettings --> StartDelayMode
+    Session "1" --> "1" SessionSettings
+    Session "1" *-- "0..*" Shot
+    Session "1" --> "1" SessionResults
+    SessionHistory "1" *-- "0..*" Session
+```
+
+Modeling choices:
+- Session is the core domain entity: it has a lifecycle state, owns the recorded shots, and carries the settings selected before the session begins.
+- SessionSettings is a value object because it is configuration data for a run (threshold, delay mode, cooldown, and optional fixed or range delays). It is not an independently tracked entity.
+- Shot is an entity because each recorded shot has its own identity in the session: a sequential number and timestamp, with split time derived from neighboring shots.
+- SessionResults is a value object because it represents computed display data (total shots, total time, split stats) rather than a persistent domain object.
+- SessionHistory models the saved previous sessions view required by the requirements; a saved session is still the same Session entity persisted for future review.
+- I did not add UI, audio, or hardware classes because the requirements describe the business/domain behavior of timing, detection, state transitions, and saved results, not implementation-specific components.
