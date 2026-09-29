@@ -40,3 +40,106 @@ Documentation changes resulting from this interaction:
 
 ### Notes
 The Copilot response was used for requirements elicitation and audit purposes only.
+
+## GitHub Copilot Chat — First Draft Domain Model
+### Prompt #3
+
+Using only the referenced `REQUIREMENTS.md` file, draft a UML class diagram for the domain model of this Android shot-timer application. Identify the domain entities, value objects, important attributes, relationships, and multiplicities that are supported by the requirements. Do not use other project files, assume implementation details, or invent features that are not stated in the requirements. Provide the diagram in Mermaid `classDiagram` source and briefly explain your modeling choices.
+
+### AI Output
+
+The AI generated an initial UML class diagram containing:
+
+- `Session`
+- `Shot`
+- `SessionSettings`
+- `StartDelayMode`
+- `SessionState`
+- `SessionResults`
+- `SessionHistory`
+
+The original AI response was saved separately as `AI_FIRST_DRAFT_DOMAIN_MODEL.md` before any comparison or revision was performed.
+
+### Existing Design Context
+
+Before prompting the AI, I had already developed and refined the architecture and domain direction for the application. That design included:
+
+- `ShootingSession`
+- `Shot`
+- `TimerSettings`
+- `StartDelay`
+- `FixedDelay`
+- `RandomDelay`
+- `SessionStatistics`
+- `SessionStatisticsCalculator`
+
+The broader architecture also already assigned timer workflow state and transitions to `TimerEngine`, persistence to `SessionRepository`, and microphone access and shot detection to separate service/platform components.
+
+The AI was intentionally given only `REQUIREMENTS.md` so that its first draft could be compared independently against my existing design rather than being influenced by the architecture I had already established.
+
+### Code Changes
+
+No code changes were requested or generated from this prompt.
+
+### Diff
+
+I compared the AI-generated first draft with the domain model and architecture decisions I had already established.
+
+- **AI:** Used `Session` as the main domain entity.  
+  **My design:** Uses `ShootingSession` to make the domain meaning more explicit.
+
+- **AI:** Did not model an explicit session timing origin.  
+  **My design:** Includes `ShootingSession.startTime`, because the start beep establishes the timing origin and shot timestamps are measured relative to it.
+
+- **AI:** Used `SessionSettings`.  
+  **My design:** Uses `TimerSettings`.
+
+- **AI:** Modeled the start delay using a `StartDelayMode` enumeration together with nullable `fixedDelay`, `minimumDelay`, and `maximumDelay` fields.  
+  **My design:** Uses a `StartDelay` value-object family with `FixedDelay(duration)` and `RandomDelay(minDelay, maxDelay)`. This prevents invalid combinations of fixed and random delay values.
+
+- **AI:** Placed `SessionState` directly on `Session`.  
+  **My design:** Keeps `TimerState` outside the core domain model. The existing architecture assigns authoritative workflow state and state transitions to `TimerEngine`.
+
+- **AI:** Included `stop()` directly on `Session`.  
+  **My design:** Places stop behavior on `TimerEngine`, because stopping controls the runtime transition from `Recording` to `Completed` and stops further shot acceptance.
+
+- **AI:** Included `save()` directly on `Session`.  
+  **My design:** Treats saving as a persistence responsibility handled through `SessionRepository`, not by `ShootingSession`.
+
+- **AI:** Added a `SessionHistory` domain class and modeled it as owning saved sessions.  
+  **My design:** Does not include `SessionHistory` as a core domain object. Saved sessions are retrieved through persistence behavior, while the history view belongs outside the core domain model.
+
+- **AI:** Used `SessionResults` as a result object associated directly with `Session`.  
+  **My design:** Uses `SessionStatistics` as a derived value produced from authoritative `Shot` records rather than as separately authoritative stored state.
+
+- **AI:** Added `splitStatisticsAvailable` as a Boolean field.  
+  **My design:** Does not store a separate availability flag because availability can be derived from whether valid split statistics exist.
+
+- **AI:** Did not explicitly model where session-statistics calculations are performed.  
+  **My design:** Includes the previously established stateless `SessionStatisticsCalculator`, which calculates session statistics from the recorded `Shot` objects and keeps calculation rules separate from result data.
+
+- **AI:** Correctly modeled one session containing zero or more `Shot` records.  
+  **My design:** Retains this relationship.
+
+- **AI:** Correctly modeled each shot with a sequential shot number, timestamp, and optional split time.  
+  **My design:** Retains these concepts and represents split time as a derived optional value.
+
+- **AI:** Correctly avoided UI, Android microphone APIs, database implementation classes, and other platform-specific classes in the core domain model.  
+  **My design:** Uses the same domain boundary.
+
+### Result
+
+The final domain model reflects the architecture and domain decisions that had already been established before the AI draft was generated.
+
+The final model contains:
+
+- `ShootingSession`
+- `Shot`
+- `TimerSettings`
+- `StartDelay`
+- `FixedDelay`
+- `RandomDelay`
+- `SessionStatistics`
+- `SessionStatisticsCalculator`
+
+The AI first draft was preserved unchanged so that the differences between the AI-generated model and my independently developed design could be evaluated and documented.
