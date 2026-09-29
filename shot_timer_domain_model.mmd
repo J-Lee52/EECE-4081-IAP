@@ -1,0 +1,57 @@
+classDiagram
+    class ShootingSession {
+        <<entity>>
+        +id
+        +startTime
+    }
+
+    class Shot {
+        <<child entity>>
+        +shotNumber: Int
+        +timestamp: Duration
+        +splitTime: Duration?
+    }
+
+    class TimerSettings {
+        <<value object>>
+        +detectionThreshold: Double
+        +detectionCooldown: Duration
+        +startDelay: StartDelay
+    }
+
+    class StartDelay {
+        <<value object>>
+    }
+
+    class FixedDelay {
+        <<value object>>
+        +duration: Duration
+    }
+
+    class RandomDelay {
+        <<value object>>
+        +minDelay: Duration
+        +maxDelay: Duration
+    }
+
+    class SessionStatistics {
+        <<derived value object>>
+        +shotCount: Int
+        +totalTime: Duration?
+        +fastestSplit: Duration?
+        +averageSplit: Duration?
+        +slowestSplit: Duration?
+    }
+
+    class SessionStatisticsCalculator {
+        <<stateless domain service>>
+        +calculate(shots: List~Shot~): SessionStatistics
+    }
+
+    ShootingSession "1" *-- "0..*" Shot : records
+    ShootingSession "1" --> "1" TimerSettings : settings snapshot
+    TimerSettings "1" *-- "1" StartDelay : startDelay
+    StartDelay <|-- FixedDelay
+    StartDelay <|-- RandomDelay
+    SessionStatisticsCalculator ..> Shot : reads
+    SessionStatisticsCalculator ..> SessionStatistics : produces
