@@ -143,3 +143,52 @@ The final model contains:
 - `SessionStatisticsCalculator`
 
 The AI first draft was preserved unchanged so that the differences between the AI-generated model and my independently developed design could be evaluated and documented.
+
+
+## GitHub Copilot — ADR-001 Project-Wide Consistency Review
+
+### Prompt #4
+
+> @project Review ADR-001.md against the rest of this project.
+>
+> Check whether the responsibilities assigned to AudioInput,
+> ShotDetector, TimerViewModel, and TimerEngine are consistent with
+> the architecture documentation, requirements, and source code.
+>
+> Identify any contradictions or unsupported claims.
+> Do not rewrite the ADR yet.
+
+### AI Output
+
+GitHub Copilot reviewed `ADR-001.md` against the project requirements, architecture documentation, and current source tree.
+
+Copilot reported that:
+
+- The responsibilities assigned to `AudioInput` are consistent with the planned architecture.
+- The responsibilities assigned to `ShotDetector` are consistent with the required microphone-threshold and cooldown behavior.
+- The ADR correctly rejects placing microphone and detection responsibilities in `TimerViewModel`.
+- The use of `TimerEngine` as the workflow/state coordinator is consistent with the architecture documentation.
+- The current source tree does not yet contain implementations of `AudioInput`, `ShotDetector`, `TimerViewModel`, or `TimerEngine`.
+- The ADR therefore describes architectural intent that is documented in the project but is not yet reflected in the current implementation.
+
+### Review of AI Feedback
+
+I agreed with Copilot's assessment that the component responsibilities in ADR-001 are consistent with the architecture documentation.
+
+I also clarified one distinction in the feedback: the requirements define the behavior the application must provide, such as microphone monitoring, threshold-based detection, cooldown enforcement, and timer states. The requirements do not require specific classes named `AudioInput`, `ShotDetector`, or `TimerEngine`. Those component names and responsibility boundaries come from my architecture design.
+
+Copilot also noted that the current source code does not yet implement these architecture components. This does not contradict ADR-001 because the ADR records an architectural decision that has already been made for the planned implementation. The corresponding source code has not yet been implemented and committed to the repository.
+
+For the current M4 milestone, I therefore did not treat the absence of these classes from the source tree as a reason to change the architectural decision. The implementation should later be checked against ADR-001 once these components are added.
+
+### Diff / Changes Made
+
+The Copilot review did not require a change to the selected architectural decision or any other changes.
+
+### Result
+
+The Copilot review confirmed that ADR-001 is consistent with the project's documented architecture.
+
+The source-code comments were noted but do not currently require changes to the ADR because the relevant architecture components have not yet been implemented and committed. Once implementation begins, the source code will need to be checked against the ADR to ensure that AudioInput, ShotDetector, TimerViewModel, and TimerEngine preserve the responsibility boundaries documented in the architecture.
+
+No application source code was changed as a result of this review.
