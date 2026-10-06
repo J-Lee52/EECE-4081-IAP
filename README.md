@@ -14,4 +14,4 @@ A mobile shot-timer application that uses a smartphone's microphone to detect fi
 - **Version Control:** Git
 - **Repository:** GitHub
 - **Development Device:** Android Emulator
-- **AI Coding Tool:** GitHub Copilot
+- **AI Coding Tool:** GitHub Copilot & Claude
