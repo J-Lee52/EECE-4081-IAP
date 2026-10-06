@@ -13,7 +13,7 @@ class ShootingSessionTest {
 
     private fun newSession() = ShootingSession(
         id = "test-session",
-        startTimeEpochMillis = 0L,
+        startTime = 0L,
         settings = TimerSettings.DEFAULT,
     )
 
@@ -60,7 +60,7 @@ class ShootingSessionTest {
         val updated = newSession().recordShot(1000.milliseconds)
 
         assertEquals("test-session", updated.id)
-        assertEquals(0L, updated.startTimeEpochMillis)
+        assertEquals(0L, updated.startTime)
         assertEquals(TimerSettings.DEFAULT, updated.settings)
     }
 
@@ -78,7 +78,7 @@ class ShootingSessionTest {
     fun session_rejectsShotsThatAreNotNumberedSequentially() {
         ShootingSession(
             id = "bad",
-            startTimeEpochMillis = 0L,
+            startTime = 0L,
             settings = TimerSettings.DEFAULT,
             shots = listOf(Shot(2, 1.seconds, null)),
         )

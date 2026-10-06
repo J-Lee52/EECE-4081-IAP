@@ -9,13 +9,13 @@ import kotlin.time.Duration
  * Timer workflow state (Idle, Recording, ...) is not part of the session; it
  * belongs to TimerEngine.
  *
- * [startTimeEpochMillis] is the wall-clock time of the start beep, stored as a
+ * [startTime] is the wall-clock time of the start beep, stored as a
  * Long because java.time needs API 26+ and the app's minSdk is 24. Shot
  * timestamps are elapsed durations measured from this moment.
  */
 data class ShootingSession(
     val id: String,
-    val startTimeEpochMillis: Long,
+    val startTime: Long,
     val settings: TimerSettings,
     val shots: List<Shot> = emptyList(),
 ) {
