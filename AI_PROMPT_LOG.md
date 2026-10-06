@@ -309,3 +309,131 @@ CI run on the pull request: the build and test steps passed. The downloaded `uni
 Pull request #1 & #2 was merged into `master` with a merge commit, so the commit hashes in this log stay valid.
 
 ADR-001 says to check the implementation against its `AudioInput` and `ShotDetector` boundaries once those classes exist. They do not exist yet, so that check is still pending.
+
+
+## Copilot Chat — Shot Detection and Timer Workflow
+
+### Prompt #8
+
+> Let's move onto the next part of the walking-skeleton.
+> Please draft Kotlin files for the audio and engine layers.
+> Include tests for the audio and engine layers
+
+### AI Output
+
+Copilot Chat drafted the audio and engine layers and the tests for them, nine files in all:
+
+- `AudioInput` and `BeepPlayer`: interfaces for the microphone and the start beep.
+- `ShotDetector`: marks a buffer as a shot when its peak amplitude reaches the threshold, and ignores further loud buffers during a cooldown.
+- `Clock` and `Scheduler`: interfaces for time and for delayed actions.
+- `TimerState` and `TimerSnapshot`: the five workflow states and the view of them for the UI.
+- `TimerEngine`: coordinates the start delay, the beep, shot detection, and `ShootingSession`, and allows only valid state changes.
+- `EngineFakes`: test doubles for the four interfaces.
+- `ShotDetectorTest` (15 tests) and `TimerEngineTest` (20 tests).
+
+Design points Copilot described: timing is measured from the start of the beep; audio during the delay and the beep is ignored so the beep cannot count as a shot; the engine is synchronized because audio arrives on a background thread; stopping is allowed only while recording.
+
+### Code Changes
+
+Added nine Kotlin files under the `audio` and `engine` packages of `app/src/main/` and `app/src/test/`. They are in commit `943d459` on branch `slice-engine-detector`.
+
+### Diff
+
+I made no modifications to Copilot's code. I only placed the files in the `audio` and `engine` package folders; their contents are unchanged.
+
+AI mistakes found during review: none.
+
+### Result
+
+Local run in Android Studio: 56 of 56 tests passed (21 earlier plus 35 new).
+
+CI run on the pull request: build and test passed. The `unit-test-report` artifact shows 56 tests, 0 failures, 0 skipped. Screenshot: `CI test Passed 002`.
+
+Pull request #2 was merged into `master` with a merge commit (`7070f40`).
+ADR-001 calls for `AudioInput` and `ShotDetector` to be separate and for `TimerEngine` to coordinate them. This step implements that, so the check I deferred in Prompt #7 can now be made against real classes
+
+
+## Claude Chat — Real Android Adapters and Session Storage
+
+### Prompt #9
+
+> Let's move onto the next phase of the walking skeleton.
+> Please draft Kotlin files for the storage layer.
+
+### AI Output
+
+Claude explained the remaining work and changed its earlier lean on storage. It had first leaned toward Room. It now recommended file-based JSON, because Room needs the KSP plugin and Claude could not check that combination against AGP 9.4.1 and Kotlin 2.2.10. It kept storage behind a `SessionRepository` interface so Room could replace it later. It split the work into two pull requests.
+
+**Step 4a, real adapters (no new dependencies):**
+
+- `AndroidAudioInput`: `AudioRecord`, 16-bit mono at 44.1 kHz, 10 ms buffers on a background thread. Its `stop()` does not wait for the audio thread, to avoid a deadlock with the engine's lock.
+- `AndroidBeepPlayer`: `ToneGenerator`, 300 ms.
+- `AndroidClock`: `SystemClock.elapsedRealtimeNanos()` for timing and `System.currentTimeMillis()` for the start time.
+- `MainThreadScheduler`: `Handler.postDelayed` on the main thread.
+- The `RECORD_AUDIO` permission line for the manifest.
+
+Claude said these classes need real Android APIs, so JVM unit tests cannot cover them, and that they can only be proven on a device.
+
+**Step 4b, storage:**
+
+- `SessionRepository`, `SessionJson` (durations stored as nanoseconds; splits recomputed on load), and `FileSessionRepository` (one JSON file per session, written through a temporary file, corrupt files skipped).
+- `SessionJsonTest` (7 tests) and `FileSessionRepositoryTest` (8 tests).
+- A `testImplementation` line for `org.json:json:20240303`, because Android's `org.json` is a stub on the JVM. Claude could not check from its workspace that this version exists.
+
+### Code Changes
+
+Four new Kotlin files and one line in `AndroidManifest.xml`. Feature commit `58d73df` on branch `slice-platform-adapters`.
+Five new Kotlin files plus edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`.
+
+### Diff
+
+I made no modifications to Claude's code. For the manifest and Gradle edits, I added exactly the lines Claude supplied.
+
+
+### Result
+
+**4a:** local run 56 of 56 tests passed (no new tests, as expected). CI report: 56 tests, 0 failures, screenshot `CI test Passed 003`.
+
+**4b:** local run 71 of 71 tests passed (56 plus 15 new). CI report: 71 tests, 0 failures, 0 skipped, screenshot `CI test Passed 004`. The `org.json` version resolved without a problem.
+The storage decision left open in Prompt #5 is now settled: **file-based JSON**. The save path is covered on the JVM by a test that opens a second repository on the same folder. Closing and reopening the real app is covered by the device run in Prompt #10.
+
+
+## Claude Chat — ViewModel, Timer Screen, and Device Test
+
+### Prompt #10
+
+> Please draft Kotlin files for the UI and device tests.
+
+### AI Output
+
+Claude answered the two scope questions before writing code.
+
+- `TimerViewModel`: holds the engine's current state, the list of saved sessions, and any error message. It moves engine updates to the main thread, saves a completed session on a background thread, and does not save a session with no shots.
+- `TimerViewModelFactory`: builds it with the real adapters and file storage.
+- `TimerViewModelTest` (11 tests, using the fakes from Prompt #9 and an in-memory repository).
+- A `lifecycle-viewmodel-compose` dependency line.
+- `TimerScreen`: Start and Stop, the microphone permission request, live shots with splits, statistics, and a "Past sessions" list. No settings screen and no random delay.
+- `DurationFormat` (times to 0.01 s, cut off rather than rounded) and `DurationFormatTest` (4 tests).
+- A replacement `MainActivity.kt` that shows `TimerScreen`.
+
+Claude noted one known limitation: the engine cannot be cancelled during the start delay, so closing the app then leaves the microphone open until the process ends.
+
+### Code Changes
+
+Seven new Kotlin files, a replacement `MainActivity.kt`, and edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`.
+
+### Diff
+
+I made no modifications to Claude's code. `MainActivity.kt` was replaced with Claude's version.
+
+AI mistakes found during review: none in the code.
+
+### Result
+
+Local run in Android Studio: 86 of 86 tests passed.
+
+CI run on the pull request: build and test passed. The report shows 86 tests, 0 failures, 0 skipped. Screenshot: `CI test Passed 005`. Pull request was merged successfully.
+
+**Device test:** I ran the app from Android Studio on a physical phone. I tapped Start, granted the microphone permission, heard the beep, clapped my hands to replicate shots, saw detected shots with splits, tapped Stop, saw the session under "Past sessions", then closed and reopened the app and saw the sessions still saved to the phone.
+
+Known limitations and deferred work: the start delay cannot be cancelled; a settings screen (US01) and `RandomDelay` are not built; a session with no shots is not saved (my choice, kept as drafted).
