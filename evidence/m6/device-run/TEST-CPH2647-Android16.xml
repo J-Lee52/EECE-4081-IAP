@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="2" failures="0" errors="0" skipped="0" time="0.000" timestamp="2026-10-20T00:10:50" hostname="localhost">
+  <testsuite name="com.example.eece4081_iap.ExampleInstrumentedTest" tests="1" failures="0" errors="0" skipped="0" time="0.001" timestamp="2026-10-20T00:10:50" hostname="localhost">
+    <properties>
+      <property name="device" value="4d553038" />
+    </properties>
+    <testcase name="useAppContext" classname="com.example.eece4081_iap.ExampleInstrumentedTest" time="0.001" />
+  </testsuite>
+  <testsuite name="com.example.eece4081_iap.acceptance.ThinSliceAcceptanceTest" tests="1" failures="0" errors="0" skipped="0" time="2.014" timestamp="2026-10-20T00:10:50" hostname="localhost">
+    <properties>
+      <property name="device" value="4d553038" />
+    </properties>
+    <testcase name="aTimedStringIsShownLiveSavedAndStillListedAfterTheAppIsReopened" classname="com.example.eece4081_iap.acceptance.ThinSliceAcceptanceTest" time="2.014" />
+  </testsuite>
+</testsuites>

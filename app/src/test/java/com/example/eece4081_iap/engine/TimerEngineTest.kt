@@ -189,6 +189,21 @@ class TimerEngineTest {
     }
 
     @Test
+    fun twoLoudBuffersAtTheSameInstant_recordOneShot() {
+        // With no cooldown the detector accepts both buffers; the engine must
+        // still not record two shots at one time (or crash the audio thread).
+        assertTrue(engine.updateSettings(settings.copy(detectionCooldown = 0.milliseconds)))
+        startAndReachRecording()
+        clock.advance(1.seconds)
+
+        audio.emit(loud)
+        audio.emit(loud)
+
+        assertEquals(1, shots().size)
+        assertEquals(1.seconds, shots().single().timestamp)
+    }
+
+    @Test
     fun snapshotStatistics_updateWithEachShot() {
         startAndReachRecording()
         clock.advance(1000.milliseconds)

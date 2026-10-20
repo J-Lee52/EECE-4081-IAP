@@ -1,0 +1,12 @@
+diff --git a/app/src/main/java/com/example/eece4081_iap/engine/TimerEngine.kt b/app/src/main/java/com/example/eece4081_iap/engine/TimerEngine.kt
+index c9f9176..535bac2 100644
+--- a/app/src/main/java/com/example/eece4081_iap/engine/TimerEngine.kt
++++ b/app/src/main/java/com/example/eece4081_iap/engine/TimerEngine.kt
+@@ -122,6 +122,7 @@ class TimerEngine(
+     @Synchronized
+     private fun onBeepFinished() {
+         if (state != TimerState.WaitingForStart) return
++        beepStartedAt = clock.elapsed()
+         setState(TimerState.Recording)
+     }
+ 

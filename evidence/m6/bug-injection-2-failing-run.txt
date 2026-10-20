@@ -1,0 +1,34 @@
+# Suite run WITH the injected fault (TimerEngine.onBeepFinished resets the timing origin)
+# 2026-10-19T18:55:48-05:00  branch m6-testing  base commit 0252e0a
+$ ./gradlew testDebugUnitTest
+Reusing configuration cache.
+> Task :app:compileDebugKotlin
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:testDebugUnitTest
+ThinSliceAcceptanceTest > aTimedStringIsShownLiveSavedAndStillListedAfterTheAppIsReopened FAILED
+    java.lang.AssertionError at ThinSliceAcceptanceTest.kt:137
+TimerEngineTest > shotAfterTheBeep_isTimedFromTheStartOfTheBeep FAILED
+    java.lang.AssertionError at TimerEngineTest.kt:148
+94 tests completed, 2 failed
+> Task :app:testDebugUnitTest FAILED
+FAILURE: Build failed with an exception.
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///C:/Users/RSC_L/AndroidStudioProjects/EECE4081IAP/app/build/reports/tests/testDebugUnitTest/index.html
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+BUILD FAILED in 23s
+29 actionable tasks: 4 executed, 25 up-to-date
+Configuration cache entry reused.
+exit code: 1
+
+# Test results by test case
+
+FAILED com.example.eece4081_iap.acceptance.ThinSliceAcceptanceTest.aTimedStringIsShownLiveSavedAndStillListedAfterTheAppIsReopened
+  java.lang.AssertionError: No node found that matches Text + InputText + EditableText contains '#1   1.25 s   split —' (ignoreCase: false) in scrollable container
+
+FAILED com.example.eece4081_iap.engine.TimerEngineTest.shotAfterTheBeep_isTimedFromTheStartOfTheBeep
+  java.lang.AssertionError: expected:<1.35s> but was:<1.2s>
+
+Total: 94 tests, 2 failed

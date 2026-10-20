@@ -1,0 +1,11 @@
+# JaCoCo coverage summary (JVM unit tests + Robolectric acceptance test)
+# Full HTML report: CI artifact 'coverage-report', or locally app/build/reports/coverage/test/debug/index.html
+TOTAL      line 356/515 (69.1%)  branch 157/222 (70.7%)
+theme      line 0/36 (0.0%)        branch 0/18 (0.0%)
+audio      line 19/89 (21.3%)      branch 20/42 (47.6%)
+eece4081_iap line 0/10 (0.0%)        branch -
+domain     line 70/70 (100.0%)     branch 51/54 (94.4%)
+ui         line 132/162 (81.5%)    branch 40/56 (71.4%)
+engine     line 76/77 (98.7%)      branch 29/32 (90.6%)
+app        line 0/8 (0.0%)         branch -
+data       line 59/63 (93.7%)      branch 17/20 (85.0%)
