@@ -223,7 +223,7 @@ None.
 
 ### Result
 
-I adopted the CI-first order and the branch-and-pull-request workflow. Storage choice (Room or file-based) is still open: `<fill in when decided>`.
+I adopted the CI-first order and the branch-and-pull-request workflow. Storage choice (Room or file-based) was left open here and settled in Prompt #9: file-based JSON.
 
 
 ## Claude Chat — CI Workflow and Slice Class Outline
@@ -250,7 +250,7 @@ Claude could not run the workflow. It only validated the YAML syntax.
 
 ### Code Changes
 
-Added `.github/workflows/Continuous_Integration.yml` in commit `<hash of first commit>`, on branch `walking-skeleton`.
+Added `.github/workflows/Continuous_Integration.yml` in commit `5c0e01b`, on branch `walking-skeleton` (pull request #1).
 
 ### Diff
 
@@ -296,9 +296,11 @@ Added the seven Kotlin files under `app/src/main/.../domain/` and `app/src/test/
 
 ### Diff
 
-I made no modifications to Claude's Kotlin files. I committed the domain files and tests exactly as drafted so that the AI's code could be tested as-is. At this time, the only change I have made to any of Claude's output is the name change to the CI workflow described under Prompt #6.
+I committed the domain files and tests exactly as drafted so that the AI's code could be tested as-is. The CI and local results below are for that unmodified code.
 
-I accepted the four flagged design decisions as drafted for now. Any later revisions will be recorded in a separate entry.
+After pull request #1 was merged, I made one change to Claude's Kotlin code. In commit `288c05e`, committed directly to `master`, I renamed `ShootingSession.startTimeEpochMillis` to `startTime` in `ShootingSession.kt` and `ShootingSessionTest.kt` (5 lines), to better match my domain model diagram. The type is still `Long`, so flagged decision 1 is unchanged apart from the name. The first CI run that covered the rename was the pull request #2 run (Prompt #8), which passed.
+
+Apart from this rename, I accepted the four flagged design decisions as drafted.
 
 ### Result
 
@@ -306,7 +308,7 @@ Local run in Android Studio: 20 of 20 tests passed
 
 CI run on the pull request: the build and test steps passed. The downloaded `unit-test-report` artifact shows 21 tests, 0 failures, 0 skipped, and 100% successful, in 0.548 s under Gradle 9.6.0 (4 + 9 + 7 new tests plus the starter `ExampleUnitTest`).
 
-Pull request #1 & #2 was merged into `master` with a merge commit, so the commit hashes in this log stay valid.
+Pull request #1 (`walking-skeleton`, containing commits `5c0e01b` and `99d3ca1`) was merged into `master` with a merge commit (`f83b0c8`), so the commit hashes in this log stay valid.
 
 ADR-001 says to check the implementation against its `AudioInput` and `ShotDetector` boundaries once those classes exist. They do not exist yet, so that check is still pending.
 
@@ -350,7 +352,7 @@ Local run in Android Studio: 56 of 56 tests passed (21 earlier plus 35 new).
 CI run on the pull request: build and test passed. The `unit-test-report` artifact shows 56 tests, 0 failures, 0 skipped. Screenshot: `CI test Passed 002`.
 
 Pull request #2 was merged into `master` with a merge commit (`7070f40`).
-ADR-001 calls for `AudioInput` and `ShotDetector` to be separate and for `TimerEngine` to coordinate them. This step implements that, so the check I deferred in Prompt #7 can now be made against real classes
+ADR-001 calls for `AudioInput` and `ShotDetector` to be separate and for `TimerEngine` to coordinate them. This step implements that, so the check I deferred in Prompt #7 can now be made against real classes.
 
 
 ## Claude Chat — Real Android Adapters and Session Storage
@@ -382,8 +384,9 @@ Claude said these classes need real Android APIs, so JVM unit tests cannot cover
 
 ### Code Changes
 
-Four new Kotlin files and one line in `AndroidManifest.xml`. Feature commit `58d73df` on branch `slice-platform-adapters`.
-Five new Kotlin files plus edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`.
+4a: Four new Kotlin files and one line in `AndroidManifest.xml`. Commit `58d73df` on branch `slice-platform-adapters`, merged as pull request #3 (`6ce5a00`).
+
+4b: Five new Kotlin files plus edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`. Commit `ed93c7f` on branch `slice-storage`, merged as pull request #4 (`d69bc93`).
 
 ### Diff
 
@@ -420,7 +423,7 @@ Claude noted one known limitation: the engine cannot be cancelled during the sta
 
 ### Code Changes
 
-Seven new Kotlin files, a replacement `MainActivity.kt`, and edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`.
+Seven new Kotlin files, a replacement `MainActivity.kt`, and edits to `gradle/libs.versions.toml` and `app/build.gradle.kts`. Commit `03904ec` on branch `slice-viewmodel`, merged as pull request #5 (`f4b2053`).
 
 ### Diff
 
@@ -437,3 +440,73 @@ CI run on the pull request: build and test passed. The report shows 86 tests, 0 
 **Device test:** I ran the app from Android Studio on a physical phone. I tapped Start, granted the microphone permission, heard the beep, clapped my hands to replicate shots, saw detected shots with splits, tapped Stop, saw the session under "Past sessions", then closed and reopened the app and saw the sessions still saved to the phone.
 
 Known limitations and deferred work: the start delay cannot be cancelled; a settings screen (US01) and `RandomDelay` are not built; a session with no shots is not saved (my choice, kept as drafted).
+
+
+## Claude Code — M6 Tests, Coverage and Bug Injection
+
+### Prompt #11
+
+> I need to create an acceptance test for the m5 thin slice from end-to-end and unit tests for the logic underneath the thin slice. There should be units tests for the existing 86 tests from the thin slice. Please also provide suggestions on additional units tests is needed. I also need a coverage report generated for all of this. I will also need to inject a fault for a bug-injection demonstration, which need to show to the fault diff, the suit failing due to the bug injection, and the fix to restore the CI to green. The bug-injection should change the starting point of when shots are measured.
+
+### AI Output
+
+This section describes Claude Code's initial output. The changes made after my review are listed under Diff.
+
+Claude Code proposed a plan before writing code, and I chose where the acceptance test runs: both on the JVM with Robolectric (so CI runs it) and on my phone.
+
+Unlike earlier prompts, Claude Code could build and run the tests on my computer, using the Java 25 that comes with Android Studio.
+
+- **Acceptance test:** `ThinSliceAcceptanceTest`, in a new `src/sharedTest` folder used by both the JVM tests and the device tests. It drives the real `TimerScreen` by its button labels through the M5 slice: Start, the start delay, the beep (a loud buffer during the beep must not count), two shots from 16-bit PCM buffers with room noise and an echo inside the cooldown, the times and splits on screen, Stop, the session saved as a JSON file, and a new ViewModel, engine and repository on the same folder still listing it. Only the hardware is replaced: microphone samples, beep, clock and delay scheduler. The real main-thread `Handler` and a real background thread are used.
+- **Unit tests (10 new):** chosen from the gaps the coverage report showed. `ShotTest` (5: shot number and time rules), `FileSessionRepositoryTest` (2: storage folder cannot be created; other files in the folder are ignored), `TimerEngineTest` (1: two loud buffers at the same instant record one shot), `TimerViewModelTest` (1: closing the app while recording releases the microphone), plus the acceptance test.
+- **Coverage:** AGP's built-in JaCoCo (`enableUnitTestCoverage`), and CI now generates and uploads a `coverage-report` artifact.
+- **Fault survey:** Claude Code applied 12 candidate one-line faults one at a time (off-by-one, boundary, inverted condition and dropped-edge-case faults), ran the suite on each, and restored the file. All 12 were caught. I chose the timing-origin fault for the demonstration.
+
+Problems Claude Code ran into and fixed:
+
+1. AGP 9 does not compile Kotlin from a folder added with `java.srcDir`; the shared folder had to be added with `kotlin.directories`.
+2. Robolectric 4.17 failed on JDK 25 until four `--add-opens`/`--add-exports` JVM flags were added to the test task.
+3. The starter project's Espresso 3.5.1 calls `InputManager.getInstance()`, which no longer exists on new Android versions. Claude Code upgraded Espresso to 3.7.0 and `androidx.test.ext:junit` to 1.3.0 (with `androidx.test:rules` 1.7.0). This also affected the device run.
+4. Its first fault-survey script did not record which tests failed and could have reused old results if a fault failed to compile. It found this, cleared the results before each run, and re-ran the survey.
+
+### Code Changes
+
+- New: `app/src/sharedTest/.../acceptance/ThinSliceAcceptanceTest.kt`, `app/src/test/.../domain/ShotTest.kt`, `evidence/m6/` (including `fault-survey.sh`).
+- Moved: `EngineFakes.kt` from `src/test` to `src/sharedTest` (contents unchanged).
+- Edited: `FileSessionRepositoryTest.kt`, `TimerEngineTest.kt`, `TimerViewModelTest.kt` (new tests only), `app/build.gradle.kts`, `gradle/libs.versions.toml`, `.github/workflows/Continuous_Integration.yml`.
+- No production code under `app/src/main` was changed. The injected fault was reverted.
+- Branch `m6-testing`. Commit: `c4fd70c`, in pull request #6. This log entry was added in a second commit on the same pull request, so that it could record the commit hash and the CI result.
+
+### Diff
+
+**Changes from Claude Code's initial output.** After reviewing the initial output, I asked Claude Code to make some improvements from a couple of my suggestions to the code. I also asked Claude Code to suggest additional improvements. It listed seven. I chose to apply all seven in addition to my two suggestions, and Claude Code made the edits at my direction:
+
+1. **Removed two `ShotTest` tests** (`theFirstShotOfASession_hasNoSplit` and `aShotFiredTheInstantTheBeepStarts_isValid`). They only built a `Shot` and read its fields back, which restates the implementation instead of testing behaviour. Coverage was identical without them. `ShotTest` now has the three rejection tests.
+2. **The acceptance test fires three shots instead of two.** With two shots there is only one split, so fastest, average and slowest were the same number. In the first fault survey, the "fastest split is the maximum" fault was not caught by the acceptance test. With splits of 0.40 s and 0.70 s, the screen must show fastest 0.40 s, average 0.55 s and slowest 0.70 s.
+3. **The acceptance test states its own settings** (0.5 threshold, 200 ms cooldown, 3 s fixed delay) instead of using `TimerSettings.DEFAULT`, whose values are placeholders that will be tuned.
+4. **"Closing the app" in the acceptance test is now realistic.** The first ViewModel is created in a `ViewModelStore`, and the store is cleared as Android does when the app closes. The test checks that the microphone is released before the app is opened again.
+5. **The fault-survey script was added to the repository** as `evidence/m6/fault-survey.sh`. The first survey used a script that existed only on Claude Code's side, so it could not be re-run.
+6. **CI caches Robolectric's Android runtime** (`~/.m2/repository/org/robolectric`) with `actions/cache@v6`, so it is not downloaded on every run.
+7. **The full coverage HTML was removed from `evidence/m6/`** (about 1.5 MB). The repository keeps `coverage-summary.txt`; the full report is the CI `coverage-report` artifact.
+8. **The `!!` in the acceptance test's saved-file check was replaced** with an assertion that gives a clear message if the file is missing.
+9. **The `ViewModelProvider` boilerplate in `TimerViewModelTest` was shortened** with a small `viewModelIn` helper.
+
+Change 2 made the screen taller, so the "Past sessions" row was below the visible part of the list and the acceptance test's `waitUntilShown` helper could not find it. Claude Code changed the helper to scroll while it waits.
+
+### Result
+
+All results below are for the final code, after the nine changes listed under Diff. The tests, coverage, bug injection and fault survey were re-run after the changes.
+
+JVM run on my computer: 94 of 94 tests passed (86 earlier plus 8 new: 7 unit tests and the acceptance test). Coverage: 69.1% of lines and 70.7% of branches overall; domain 100% of lines, engine 98.7%, data 93.7%, ui 81.5%. Coverage was the same before and after removing the two `ShotTest` tests. The 0% classes are the Android hardware adapters, the factory, `MainActivity` and the theme, which need a real device.
+
+Device run on my phone (CPH2647, Android 16), with the final test: `ThinSliceAcceptanceTest` and the starter instrumented test passed, 2 of 2 (the acceptance test took 2.0 s). The first two attempts after the review changes failed before the test started: the phone refused to let the test grant the microphone permission over USB (`SecurityException: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS`). This is a OnePlus restriction on granting permissions over USB, not a test failure. I granted the microphone permission to the app myself in the phone's settings, and the test was run with the app left installed so the permission was kept.
+
+**Fault survey.** All 12 candidate faults were caught. The acceptance test caught 6 of them (A, D, E, J, K and L in `fault-survey.txt`); before change 2 it caught 4.
+
+**Bug injection.** The fault adds one line to `TimerEngine.onBeepFinished()`, `beepStartedAt = clock.elapsed()`, which moves the timing origin from the start of the beep to its end. The app still runs and detects shots, but every shot time is short by the length of the beep (300 ms on a device), which breaks US03 and NFR 01. With the fault, 2 of 94 tests failed:
+
+- `TimerEngineTest.shotAfterTheBeep_isTimedFromTheStartOfTheBeep`: `expected:<1.35s> but was:<1.2s>`
+- `ThinSliceAcceptanceTest`: the screen did not show `#1   1.25 s   split —`
+
+After `git checkout` of the file, 94 of 94 passed. Evidence is in `evidence/m6/` (fault diff, failing run, revert, passing run, coverage, device run and the 12-fault survey).
+
+CI run on the pull request: run #15 of `Continuous_Integration` on commit `c4fd70c` passed in about 3 minutes. Every step succeeded, including the new Robolectric cache step, `Run unit tests` (which includes the Robolectric acceptance test) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts. The downloaded `unit-test-report` shows 94 tests, 0 failures, 0 skipped, and 100% successful, in 11.908 s; `ThinSliceAcceptanceTest` took 10.373 s of that under Robolectric. The downloaded `coverage-report` matches the local coverage report exactly, overall and for every package: 356 of 515 lines (69.1%) and 157 of 222 branches (70.7%).

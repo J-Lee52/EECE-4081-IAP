@@ -1,5 +1,9 @@
 package com.example.eece4081_iap.ui
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.eece4081_iap.data.SessionRepository
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
@@ -10,6 +14,7 @@ import com.example.eece4081_iap.engine.FakeScheduler
 import com.example.eece4081_iap.engine.TimerEngine
 import com.example.eece4081_iap.engine.TimerState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -190,6 +195,23 @@ class TimerViewModelTest {
         viewModel.dismissError()
 
         assertNull(viewModel.errorMessage)
+    }
+
+    /** Creates the ViewModel inside [store], so clearing the store calls onCleared() as Android does. */
+    private fun viewModelIn(store: ViewModelStore, repository: SessionRepository): TimerViewModel =
+        ViewModelProvider(store, viewModelFactory { initializer { viewModel(repository) } })[TimerViewModel::class.java]
+
+    @Test
+    fun closingTheAppWhileRecording_releasesTheMicrophone() {
+        val store = ViewModelStore()
+        val viewModel = viewModelIn(store, InMemoryRepository())
+        reachRecording(viewModel)
+        assertTrue(audio.started)
+
+        store.clear() // what Android does when the screen is finished
+
+        assertFalse(audio.started)
+        assertEquals(TimerState.Completed, engine.snapshot().state)
     }
 
     @Test

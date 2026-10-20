@@ -9,6 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 
 class FileSessionRepositoryTest {
@@ -102,5 +103,27 @@ class FileSessionRepositoryTest {
             repository.save(session("../evil", 1_000L, 1200))
         }
         assertTrue(repository.loadAll().isEmpty())
+    }
+
+    @Test
+    fun save_whenTheStorageFolderCannotBeCreated_throwsIOException() {
+        // A plain file where the folder should be, so mkdirs() must fail.
+        directory().writeText("not a folder")
+
+        assertThrows(IOException::class.java) {
+            repository().save(session("a", 1_000L, 1200))
+        }
+    }
+
+    @Test
+    fun loadAll_ignoresFilesThatAreNotSessions() {
+        val repository = repository()
+        val good = session("good", 1_000L, 1200)
+        repository.save(good)
+        File(directory(), "notes.txt").writeText("{}")
+        File(directory(), "half-written.json.tmp").writeText("{")
+        File(directory(), "folder.json").mkdir()
+
+        assertEquals(listOf(good), repository.loadAll())
     }
 }

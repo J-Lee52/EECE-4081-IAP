@@ -1,0 +1,4 @@
+# Revert of the injected fault
+$ git checkout -- app/src/main/java/com/example/eece4081_iap/engine/TimerEngine.kt
+$ git diff app/src/main   (empty = source matches the committed code)
+(no differences)
