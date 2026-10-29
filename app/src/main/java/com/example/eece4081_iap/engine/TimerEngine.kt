@@ -11,10 +11,9 @@ import java.util.UUID
 import kotlin.time.Duration
 
 /**
- * Owns the timer workflow: the five states and the transitions between them.
- *
- *   Idle/Completed --start()--> Preparing --> WaitingForStart
- *     --(delay elapsed, beep plays, beep finishes)--> Recording --stop()--> Completed
+ * Runs the timer workflow: start() and stop(), the start delay, the beep, and
+ * shot detection. Which state may follow which is defined once, in
+ * [TimerState.canMoveTo]; every change goes through [moveTo], which applies it.
  *
  * It wires AudioInput to ShotDetector (ADR-001) and records detected shots in
  * a ShootingSession. It has no Android types: the microphone, beep, clock and
@@ -54,36 +53,36 @@ class TimerEngine(
      */
     @Synchronized
     fun updateSettings(newSettings: TimerSettings): Boolean {
-        if (state != TimerState.Idle && state != TimerState.Completed) return false
+        if (!state.isAtRest) return false
         settings = newSettings
         return true
     }
 
     /**
-     * Starts a session. Allowed only in Idle or Completed (US02). From
-     * Completed the engine first resets internally to Idle, so no separate
-     * reset action is needed. Returns false if a session is already active or
-     * the microphone could not be opened (the engine is then back in Idle).
+     * Starts a session. Allowed only in Idle or Completed (US02); from
+     * Completed a new session simply replaces the finished one, so no
+     * separate reset action is needed. Returns false if a session is already
+     * active or the microphone could not be opened (the engine is then back
+     * in Idle).
      */
     @Synchronized
     fun start(): Boolean {
-        if (state != TimerState.Idle && state != TimerState.Completed) return false
+        if (!state.canMoveTo(TimerState.Preparing)) return false
 
-        // Internal reset: a new session begins with no shots or splits.
-        state = TimerState.Idle
+        // A new session begins with no shots or splits.
         session = null
         detector = null
 
-        setState(TimerState.Preparing)
+        requireMoveTo(TimerState.Preparing)
         try {
             audioInput.start(this::onSamples)
         } catch (e: Exception) {
-            setState(TimerState.Idle)
+            requireMoveTo(TimerState.Idle)
             return false
         }
 
         detector = ShotDetector(settings.detectionThreshold, settings.detectionCooldown)
-        setState(TimerState.WaitingForStart)
+        requireMoveTo(TimerState.WaitingForStart)
 
         // Exhaustive over StartDelay: adding RandomDelay later forces this to be updated.
         val delay = when (val startDelay = settings.startDelay) {
@@ -99,9 +98,9 @@ class TimerEngine(
      */
     @Synchronized
     fun stop(): Boolean {
-        if (state != TimerState.Recording) return false
+        if (!state.canMoveTo(TimerState.Completed)) return false
         audioInput.stop()
-        setState(TimerState.Completed)
+        requireMoveTo(TimerState.Completed)
         return true
     }
 
@@ -121,8 +120,9 @@ class TimerEngine(
 
     @Synchronized
     private fun onBeepFinished() {
-        if (state != TimerState.WaitingForStart) return
-        setState(TimerState.Recording)
+        // An event callback: if it arrives late (the state has moved on), the
+        // table rejects the move and the callback is ignored, as intended.
+        moveTo(TimerState.Recording)
     }
 
     @Synchronized
@@ -143,9 +143,27 @@ class TimerEngine(
         notifyListener()
     }
 
-    private fun setState(newState: TimerState) {
-        state = newState
+    /**
+     * The only place [state] changes. Applies the move if [TimerState.canMoveTo]
+     * allows it and tells the listener; otherwise changes nothing and returns false.
+     * Use it directly only for event callbacks, where a rejected (outdated) event
+     * is expected and should be ignored.
+     */
+    private fun moveTo(next: TimerState): Boolean {
+        if (!state.canMoveTo(next)) return false
+        state = next
         notifyListener()
+        return true
+    }
+
+    /**
+     * For a transition the caller has already established is allowed. A
+     * rejection here would mean the table and the engine disagree, which is a
+     * bug, so it fails loudly instead of being silently ignored.
+     */
+    private fun requireMoveTo(next: TimerState) {
+        val from = state
+        check(moveTo(next)) { "Transition $from -> $next is not allowed by TimerState.canMoveTo" }
     }
 
     private fun notifyListener() {
