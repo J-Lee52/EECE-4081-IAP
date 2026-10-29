@@ -510,3 +510,61 @@ Device run on my phone (CPH2647, Android 16), with the final test: `ThinSliceAcc
 After `git checkout` of the file, 94 of 94 passed. Evidence is in `evidence/m6/` (fault diff, failing run, revert, passing run, coverage, device run and the 12-fault survey).
 
 CI run on the pull request: run #15 of `Continuous_Integration` on commit `c4fd70c` passed in about 3 minutes. Every step succeeded, including the new Robolectric cache step, `Run unit tests` (which includes the Robolectric acceptance test) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts. The downloaded `unit-test-report` shows 94 tests, 0 failures, 0 skipped, and 100% successful, in 11.908 s; `ThinSliceAcceptanceTest` took 10.373 s of that under Robolectric. The downloaded `coverage-report` matches the local coverage report exactly, overall and for every package: 356 of 515 lines (69.1%) and 157 of 222 branches (70.7%).
+
+
+## Claude Code — Documented Refactor
+
+### Prompt #12
+
+> Please help me improve the internal structure of the app without changing what is does, and prove that is what happened. Please suggest a refactor in the codebase that is genuinely worse that it should be and name the smell. We will need to run the same tests before and after the refactor. Both tests must pass, unchanged. Please include what was wrong, what was done to improve the codebase, and what is now easier.
+
+Followed by the M7 assignment text, pasted unchanged: improve the internal structure of the app without changing what it does, name the smell, run the same tests before and after (unchanged), and write a short note on what was wrong, what was done and what is now easier.
+
+### AI Output
+
+Claude Code read the app code and listed four candidate smells, checked against the rule that the tests must not change:
+
+- A: scattered state-transition rules in `TimerEngine` (recommended)
+- B: a long function mixing display rules with layout in `TimerScreen`
+- C: a Boolean result with two meanings in `TimerEngine.start()`
+- D: duplicated JSON key strings in `SessionJson`
+
+It ruled out C, because fixing it would change `start()`, which the tests call. It warned that B is only partly protected by tests.
+
+I chose A. Claude Code's initial output, before my review:
+
+- **Smell named:** duplicated, scattered conditional logic, with the timer's state machine left implicit. "Idle or Completed" was written out three times (`start()`, `updateSettings()`, and the Start button in `TimerScreen`). `start()`, `stop()` and `onBeepFinished()` each had their own guard. A hidden `state = Idle` write in `start()` skipped the method that notifies the screen.
+- **Change:** the transition rules moved into `TimerState` (`canMoveTo(next)`, a single table, and `isAtRest`). `setState()` was replaced by `moveTo(next)`, the only place the engine changes state, which checks the table, notifies the listener, and returns false for a move the table does not allow. Every transition, including the required ones in `start()` and `stop()`, called `moveTo()`. In `start()`, its result was not used. The duplicated guards and the hidden write were removed. No public method of `TimerEngine` changed.
+- **Proof:**
+  - Claude Code ran the full suite on unchanged `master` before the refactor and again after it: 94 of 94 passed both times.
+  - It recorded SHA-256 checksums of all 14 test files and the list of tests run, and showed both were identical before and after.
+- **Supplementary check:** Claude Code broke the new transition table in two ways and showed the unchanged suite caught both (3 tests and 1 test), recorded in `evidence/m7/table-fault-check.txt`.
+- **Note:** `REFACTOR_NOTE.md` said the hidden `state = Idle` write was gone and that the table allows `Completed → Preparing` directly, "which is what the screen always saw", without explaining why removing the intermediate `Idle` does not change behaviour.
+
+### Code Changes
+
+- Edited: `engine/TimerState.kt`, `engine/TimerEngine.kt`, `ui/TimerScreen.kt` (3 files, 68 lines added, 26 removed, final version).
+- New: `evidence/m7/` (diff, before and after test runs, test-set proof, `REFACTOR_NOTE.md`).
+- No test files were changed.
+- Branch `m7-refactor`. Commit: `3fe9679`, in pull request #7. This log entry was added in a second commit on the same pull request, so that it could record the commit hash and the CI result.
+
+### Diff
+
+**Changes from Claude Code's initial output.** After reviewing the initial output, I asked for three changes, and Claude Code made the edits at my direction:
+
+1. **The note now explains the `Completed → Preparing` change explicitly.** The refactor changed starting a new session after a finished one from `Completed → Idle → Preparing` to `Completed → Preparing`, and the note's wording was confusing about this. I asked for it to state that this preserves the externally observable behaviour. The intermediate `Idle` was assigned without notifying the listener, inside one synchronized `start()` call, so the screen, the ViewModel and the tests only ever saw `Completed` followed by `Preparing`.
+2. **Removed the supplementary table fault check.** The assignment's proof is the unchanged suite passing before and after. The mutation-style check was not part of that proof, and describing temporary code changes in a "nothing changed" milestone could be misread. `table-fault-check.txt` was deleted, and its mentions were removed from the evidence README and the note.
+3. **Required transitions are now explicit.** In the initial output, `start()` had already checked that a transition was allowed and then called `moveTo()` without using its result. I asked for required transitions to be explicit, but not for event callbacks, where an outdated callback is expected to be ignored. Claude Code added `requireMoveTo(next)`, which fails with an error if the table ever rejects the move. It is used for the four required transitions in `start()` and `stop()`. `onBeepFinished()` still calls `moveTo()` directly, with a comment explaining that a late callback is ignored. `stop()` now returns `true` explicitly after the required move.
+
+Because change 3 changed the code, the after test run, the before-and-after diff and the test-set proof were regenerated afterwards. The same 94 tests passed, and all 14 test files still had identical checksums. The before run was not changed, because it is the run on unchanged `master`.
+
+Decisions I made during the prompt:
+
+- **Smell to refactor:** from the four candidates, I chose the scattered state-transition rules (A).
+- **Log:** I asked Claude Code to draft this entry for my review.
+
+### Result
+
+Before the refactor: 94 of 94 tests passed. After the refactor: the same 94 tests passed, with no test file changed.
+
+CI run on the pull request: run #18 of `Continuous_Integration` on commit `3fe9679` passed in about 4 minutes. Every step succeeded, including `Run unit tests` (with the Robolectric acceptance test) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts. The downloaded `unit-test-report` shows 94 tests, 0 failures, 0 skipped, and 100% successful, in 15.922 s, with the same per-class counts as the before and after runs; `ThinSliceAcceptanceTest` took 14.058 s of that under Robolectric.

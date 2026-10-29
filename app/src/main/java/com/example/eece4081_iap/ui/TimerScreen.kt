@@ -82,10 +82,9 @@ fun TimerScreen(
             Text(statusText(state), style = MaterialTheme.typography.titleMedium)
         }
         item {
-            when (state) {
-                TimerState.Recording -> Button(onClick = { viewModel.stop() }) { Text("Stop") }
-                TimerState.Idle, TimerState.Completed ->
-                    Button(onClick = { onStartClicked() }) { Text("Start") }
+            when {
+                state == TimerState.Recording -> Button(onClick = { viewModel.stop() }) { Text("Stop") }
+                state.isAtRest -> Button(onClick = { onStartClicked() }) { Text("Start") }
                 else -> Button(onClick = {}, enabled = false) { Text("Please wait") }
             }
         }

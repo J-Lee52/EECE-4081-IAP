@@ -1,0 +1,33 @@
+# Proof that the test set was not changed by the refactor
+
+## 1. git: no changes in any test folder (empty output = unchanged)
+$ git status --short -- app/src/test app/src/sharedTest app/src/androidTest
+(no output: the test folders are unchanged)
+
+## 2. SHA-256 of every test file, before and after
+Identical: all 14 test files have the same checksum before and after.
+
+6763bddf44ed08e23b82c1da9df9a9ed5e2c32572c1d6fe350556ee54891aa7c *app/src/androidTest/java/com/example/eece4081_iap/ExampleInstrumentedTest.kt
+4f9e3de0fa5e014477ea09aa3df310462b98bc25acb69265893241c6351c602e *app/src/sharedTest/java/com/example/eece4081_iap/acceptance/ThinSliceAcceptanceTest.kt
+33c21ae022272f0816b69db70120a8f3feb4475006fde1b68699a9b3ebc7fc21 *app/src/sharedTest/java/com/example/eece4081_iap/engine/EngineFakes.kt
+7502cd793c1ed8399645ff05bc17f269e7a390e0ad8b5374d15beacc6f62d6a5 *app/src/test/java/com/example/eece4081_iap/ExampleUnitTest.kt
+eb4948a83aac7374241db82c702a086bc49f71f49ea881ed7c239a34082ddd23 *app/src/test/java/com/example/eece4081_iap/audio/ShotDetectorTest.kt
+21c64a4ce38ad8e83009743524c45dfeb2ad3b4a08f48b5e0c9af0ed565dd5fa *app/src/test/java/com/example/eece4081_iap/data/FileSessionRepositoryTest.kt
+1fb6d2c54ed731f9e7ccdc22294b8cfa1ff41991377a93b8e394aaf1d599772e *app/src/test/java/com/example/eece4081_iap/data/SessionJsonTest.kt
+74cc015c552323ff3907dd03a95abbd4a1eb8ca4671190b7f4a799306d346217 *app/src/test/java/com/example/eece4081_iap/domain/SessionStatisticsCalculatorTest.kt
+8c236c1beb4bd87ee481a843e43b501329c9858fd80987fad2bb4e98c29ac8a6 *app/src/test/java/com/example/eece4081_iap/domain/ShootingSessionTest.kt
+779f1e6cc89274f13e5e63e1949337486259c5b69ce8d63781528ebc398d16ee *app/src/test/java/com/example/eece4081_iap/domain/ShotTest.kt
+6a09b73d840b9db662f0ef01e13c94cb49c7de72b3e59b97946206a8d6c4098f *app/src/test/java/com/example/eece4081_iap/domain/TimerSettingsTest.kt
+7d29482668d7f9bb28b24b460640ab4e3f40e3ec71b187f0594beb348af11d64 *app/src/test/java/com/example/eece4081_iap/engine/TimerEngineTest.kt
+edead87b5a7514ff4c3527752a2bceafcc480fd1a37de25a9ff093f36c4b56d1 *app/src/test/java/com/example/eece4081_iap/ui/DurationFormatTest.kt
+15570b157f168b35186bb4738dcd2c78c00b24a3111ac260370569ff2cc26ead *app/src/test/java/com/example/eece4081_iap/ui/TimerViewModelTest.kt
+
+## 3. The tests that actually ran, before and after
+Identical: the same 94 tests ran in both runs, all passing (see test-run-before.txt and test-run-after.txt).
+
+## 4. What the refactor changed (app code only)
+$ git diff --stat -- app/src/main
+ .../com/example/eece4081_iap/engine/TimerEngine.kt | 60 ++++++++++++++--------
+ .../com/example/eece4081_iap/engine/TimerState.kt  | 27 +++++++++-
+ .../com/example/eece4081_iap/ui/TimerScreen.kt     |  7 ++-
+ 3 files changed, 68 insertions(+), 26 deletions(-)

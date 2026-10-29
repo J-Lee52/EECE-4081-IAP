@@ -1,0 +1,131 @@
+# BEFORE the refactor: full JVM test suite (unit tests + Robolectric acceptance test)
+# 2026-10-28T20:41:53-05:00  branch m7-refactor  commit 5b60c3a (unchanged master)
+$ ./gradlew testDebugUnitTest --rerun-tasks
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as configuration cache cannot be reused because file 'gradle\libs.versions.toml' has changed.
+BUILD SUCCESSFUL in 1m 20s
+29 actionable tasks: 29 executed
+Configuration cache entry stored.
+exit code: 0
+
+# Results by test class
+
+ExampleUnitTest  (1 tests, 0 failed)
+  PASS  addition_isCorrect
+
+acceptance.ThinSliceAcceptanceTest  (1 tests, 0 failed)
+  PASS  aTimedStringIsShownLiveSavedAndStillListedAfterTheAppIsReopened
+
+audio.ShotDetectorTest  (15 tests, 0 failed)
+  PASS  loudBufferAfterCooldown_isAShot
+  PASS  thresholdOfZero_isRejected
+  PASS  emptyBuffer_isNotAShot
+  PASS  bufferExactlyOneCooldownLater_isAShot
+  PASS  bufferJustBelowThreshold_isNotAShot
+  PASS  negativePeak_countsTowardTheThreshold
+  PASS  peakAmplitude_isNormalizedToFullScale
+  PASS  bufferExactlyAtThreshold_isAShot
+  PASS  thresholdAboveOne_isRejected
+  PASS  quietBuffer_isNotAShot
+  PASS  loudBuffer_isAShotAtTheGivenTime
+  PASS  ignoredBufferDoesNotRestartTheCooldown
+  PASS  quietBufferDoesNotStartACooldown
+  PASS  negativeCooldown_isRejected
+  PASS  loudBufferInsideCooldown_isIgnored
+
+data.FileSessionRepositoryTest  (10 tests, 0 failed)
+  PASS  save_whenTheStorageFolderCannotBeCreated_throwsIOException
+  PASS  save_thenLoadAll_returnsTheSession
+  PASS  save_withAnIdThatIsNotAPlainFileName_isRejected
+  PASS  save_sameIdAgain_replacesTheEarlierCopy
+  PASS  loadAll_beforeAnythingIsSaved_isEmpty
+  PASS  aNewRepositoryOnTheSameFolder_seesSavedSessions
+  PASS  aCorruptFile_isSkippedAndOtherSessionsStillLoad
+  PASS  loadAll_returnsNewestFirst
+  PASS  loadAll_ignoresFilesThatAreNotSessions
+  PASS  save_leavesNoTemporaryFilesBehind
+
+data.SessionJsonTest  (7 tests, 0 failed)
+  PASS  decode_missingField_isRejected
+  PASS  roundTrip_keepsNanosecondPrecision
+  PASS  decode_text_thatIsNotJson_isRejected
+  PASS  roundTrip_preservesIdStartTimeSettingsAndShots
+  PASS  decode_unknownStartDelayType_isRejected
+  PASS  roundTrip_recomputesTheSplits
+  PASS  roundTrip_sessionWithNoShots
+
+domain.SessionStatisticsCalculatorTest  (4 tests, 0 failed)
+  PASS  twoShots_fastestAverageAndSlowestAreTheSameSplit
+  PASS  noShots_hasZeroCountAndNoStatistics
+  PASS  threeShots_computesCountTotalAndSplitStatistics
+  PASS  singleShot_hasTotalTimeButNoSplitStatistics
+
+domain.ShootingSessionTest  (9 tests, 0 failed)
+  PASS  laterShots_getSequentialNumbersAndSplitFromPreviousShot
+  PASS  firstShot_hasNumberOneAndNoSplit
+  PASS  recordShot_rejectsTimestampBeforePreviousShot
+  PASS  splitTimes_matchExpectedValuesWithinNfr01Tolerance
+  PASS  recordShot_returnsNewSessionAndLeavesOriginalUnchanged
+  PASS  recordShot_rejectsTimestampEqualToPreviousShot
+  PASS  session_rejectsShotsThatAreNotNumberedSequentially
+  PASS  newSession_hasNoShots
+  PASS  recordShot_keepsIdStartTimeAndSettings
+
+domain.ShotTest  (3 tests, 0 failed)
+  PASS  aNegativeSplit_isRejected
+  PASS  shotNumberZero_isRejected
+  PASS  aShotBeforeTheBeep_isRejected
+
+domain.TimerSettingsTest  (7 tests, 0 failed)
+  PASS  thresholdOfZero_isRejected
+  PASS  negativeFixedDelay_isRejected
+  PASS  thresholdOfExactlyOne_isAccepted
+  PASS  defaultSettings_useAFixedStartDelay
+  PASS  thresholdAboveOne_isRejected
+  PASS  validSettings_areAccepted
+  PASS  negativeCooldown_isRejected
+
+engine.TimerEngineTest  (21 tests, 0 failed)
+  PASS  microphoneFailure_returnsToIdleAndSchedulesNothing
+  PASS  listener_isNotifiedWhenAShotIsRecorded
+  PASS  listener_seesEachStateInOrder
+  PASS  twoLoudBuffersAtTheSameInstant_recordOneShot
+  PASS  quietAudio_isNotRecorded
+  PASS  session_usesTheSettingsSelectedBeforeItStarted
+  PASS  start_fromIdle_waitsForStartAndOpensTheMicrophone
+  PASS  updateSettings_isAllowedInIdleAndCompletedButNotWhileActive
+  PASS  secondLoudBufferInsideTheCooldown_isIgnored
+  PASS  stop_whileRecording_completesTheSessionAndReleasesTheMicrophone
+  PASS  audioBeforeAndDuringTheBeep_isNotRecordedAsAShot
+  PASS  newEngine_isIdleWithNoSession
+  PASS  shotAfterTheBeep_isTimedFromTheStartOfTheBeep
+  PASS  start_fromCompleted_beginsANewSessionWithNoShots
+  PASS  stop_whenNotRecording_isRejectedAndChangesNothing
+  PASS  start_whileASessionIsActive_isRejected
+  PASS  snapshotStatistics_updateWithEachShot
+  PASS  audioAfterStop_isNotRecordedAndTheResultsDoNotChange
+  PASS  secondShotAfterTheCooldown_getsASplitFromTheFirst
+  PASS  beepFinished_entersRecording
+  PASS  delayElapsed_playsTheBeepButStaysWaitingUntilItFinishes
+
+ui.DurationFormatTest  (4 tests, 0 failed)
+  PASS  extraPrecision_isCutOffNotRounded
+  PASS  wholeSeconds_showTwoDecimals
+  PASS  hundredths_areShown
+  PASS  zero_showsTwoDecimals
+
+ui.TimerViewModelTest  (12 tests, 0 failed)
+  PASS  completingASessionWithNoShots_doesNotSaveIt
+  PASS  dismissError_clearsTheMessage
+  PASS  microphoneFailure_showsAnErrorAndStaysIdle
+  PASS  newViewModel_isIdleWithNoErrorAndEmptyHistory
+  PASS  aFailedSave_showsAnError
+  PASS  startingWhileASessionIsActive_isNotReportedAsAMicrophoneError
+  PASS  history_isLoadedFromTheRepositoryAtStartup
+  PASS  closingTheAppWhileRecording_releasesTheMicrophone
+  PASS  snapshot_followsTheEngineThroughASession
+  PASS  completingASessionWithShots_savesItAndShowsItInHistory
+  PASS  startingAgain_clearsAnEarlierError
+  PASS  aSessionIsSavedOnlyOnce
+
+Total: 94 tests, 0 failed, 0 skipped
