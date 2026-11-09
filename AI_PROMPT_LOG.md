@@ -649,3 +649,55 @@ Decisions I made during the prompt:
 134 of 134 JVM tests passed locally (109 after the initial output, 112 after changes 1 and 2, 132 after changes 3 to 9, 134 after change 10). The final phone capture is in `evidence/m8/`. All 52 records parse as JSON with the same eight fields. One run, `runId` 5b1ef293, is traced in 19 lines from Start to `session.saved`; runbook step 2's `findstr` returns exactly those lines. The quiet run `f18d1fb9` shows the runbook's symptom (row F: loudest sounds 0.033–0.212 against a 0.5 threshold, 0 shots).
 
 CI run on the pull request: run #21 of `Continuous_Integration` on commit `cb28811` passed in about 4 minutes. Every step succeeded, including `Run unit tests` (with the Robolectric acceptance test and the new logging tests) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts.
+
+
+## Claude Code — Cancel a Run When the App Closes
+
+### Prompt #14
+
+> TimerViewModel.onCleared() calls engine.stop(), but stop() only works in Recording. If the app closes during Preparing or WaitingForStart, the microphone can remain open until the process ends. Add an engine-level cancel() operation, a WaitingForStart → Idle transition, and scheduler cancellation or a run token so delayed callbacks cannot affect a later session.
+
+I made this request during M8. Claude Code proposed doing it after M8 was committed, as its own commit and log entry, and I agreed.
+
+### AI Output
+
+Two of the three parts were already in place from the M8 review changes:
+
+- **The `WaitingForStart → Idle` transition** was added to `TimerState.canMoveTo` for runs abandoned when the beep or the microphone fails.
+- **A run token:** every callback from the hardware edge (the start delay, the beep finishing, audio samples and audio errors) is tagged with the id of the run that started it, and ignored by any later run. Claude Code used this instead of scheduler cancellation, so the `Scheduler` interface did not change.
+
+For the remaining part, Claude Code added `TimerEngine.cancel()`. It ends the active run at any stage and releases the microphone:
+
+- **WaitingForStart** (the start delay, or the beep is playing): the run is abandoned and the timer returns to Idle. A delay or beep callback that arrives afterwards is ignored.
+- **Recording:** the run is completed as by `stop()`, keeping its shots.
+- **Idle or Completed:** returns false and changes nothing. Preparing exists only inside `start()`, which holds the engine's lock, so `cancel()` can never see it.
+
+`TimerViewModel.onCleared()` now calls `engine.cancel()` instead of `engine.stop()`. A requested cancel is logged as `run.abandoned` with reason `cancelled` at INFO level, and no problem is shown to the user. Hardware failures stay WARN.
+
+9 tests were added:
+
+- `TimerViewModelTest` (2): closing the app during the start delay releases the microphone; closing it while the beep plays releases the microphone, and the run never starts recording.
+- `TimerEngineTest` (6): cancel in each state, a delay that ends after cancel does not play the beep, and a new run can start after cancel.
+- `RunTraceLoggingTest` (1): the cancel is logged on the run's trace.
+
+143 of 143 tests passed.
+
+While writing the tests, Claude Code's first version of "a new run can start after cancel" failed. The test helper ran the oldest waiting delay, which belonged to the cancelled run, and the engine correctly ignored it. The test was corrected to let the old delay end first, which also shows that a cancelled run's delay cannot start a later run.
+
+### Code Changes
+
+- Edited: `engine/TimerEngine.kt` (`cancel()`; `abandonRun()` also covers a cancel with no problem), `engine/TimerState.kt` (diagram comment), `ui/TimerViewModel.kt` (`onCleared()`).
+- Tests: `TimerEngineTest.kt`, `TimerViewModelTest.kt`, `RunTraceLoggingTest.kt`.
+- Branch `engine-cancel-on-close`. Commit: `416902f`, in pull request #9 (merged as `25acc65`). This log entry was committed afterwards in a separate pull request.
+
+### Diff
+
+`<fill in: any changes I asked for or made after review, or "none">`
+
+**Commit check warnings.** When I first tried to commit, Android Studio's code analysis reported 6 warnings, all on test lines that already existed on `master`. Claude Code fixed one: a redundant `Executor { … }` in `TimerViewModelTest`, and the import it left unused. It advised leaving the other five: "`assertEquals()` between `long` and `Duration`" in `TimerEngineTest`. These are false positives, because Kotlin's `Duration` is stored as a number internally. The assertions do compare durations: the M6 fault survey's faults E, J and K were caught by exactly these lines. 143 of 143 tests still passed.
+
+### Result
+
+143 of 143 JVM tests passed locally.
+
+CI run on the pull request: run #24 of `Continuous_Integration` on commit `416902f` passed in about 1.5 minutes. Every step succeeded, and the run was faster than earlier ones because the Robolectric runtime was restored from the CI cache.
