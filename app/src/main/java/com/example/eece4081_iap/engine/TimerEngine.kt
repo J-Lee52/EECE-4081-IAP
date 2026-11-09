@@ -6,14 +6,17 @@ import com.example.eece4081_iap.audio.BeepError
 import com.example.eece4081_iap.audio.BeepPlayer
 import com.example.eece4081_iap.audio.ShotDetector
 import com.example.eece4081_iap.domain.FixedDelay
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.SessionStatisticsCalculator
 import com.example.eece4081_iap.domain.ShootingSession
+import com.example.eece4081_iap.domain.StartDelay
 import com.example.eece4081_iap.domain.TimerSettings
 import com.example.eece4081_iap.logging.EventLog
 import com.example.eece4081_iap.logging.LogLevel
 import com.example.eece4081_iap.logging.LogRecord
 import com.example.eece4081_iap.logging.bestEffort
 import java.util.UUID
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -52,6 +55,7 @@ class TimerEngine(
     initialSettings: TimerSettings = TimerSettings.DEFAULT,
     private val newRunId: () -> String = { UUID.randomUUID().toString().take(8) },
     log: EventLog = EventLog.NONE,
+    private val random: Random = Random.Default,
 ) {
     /** Called after every change to the state or the session. */
     @Volatile
@@ -113,13 +117,16 @@ class TimerEngine(
         problem = null
         runId = newRunId()
         resetAudioCounters()
+        // The delay for this run is chosen once, now (US03). For Random
+        // Range the log shows both the range and the delay actually chosen.
+        val startDelay = settings.startDelay
+        val delay = startDelay.chooseDuration(random)
         record(
             LogLevel.INFO, "run.started",
             "threshold" to settings.detectionThreshold,
             "cooldownMs" to settings.detectionCooldown.inWholeMilliseconds,
-            "startDelayMs" to when (val startDelay = settings.startDelay) {
-                is FixedDelay -> startDelay.duration.inWholeMilliseconds
-            },
+            *startDelayFields(startDelay),
+            "startDelayMs" to delay.inWholeMilliseconds,
         )
 
         requireMoveTo(TimerState.Preparing)
@@ -146,12 +153,18 @@ class TimerEngine(
         detector = ShotDetector(settings.detectionThreshold, settings.detectionCooldown)
         requireMoveTo(TimerState.WaitingForStart)
 
-        // Exhaustive over StartDelay: adding RandomDelay later forces this to be updated.
-        val delay = when (val startDelay = settings.startDelay) {
-            is FixedDelay -> startDelay.duration
-        }
         scheduler.schedule(delay) { onDelayElapsed(owner) }
         return true
+    }
+
+    /** The start-delay mode and, for Random Range, its range, for "run.started". */
+    private fun startDelayFields(startDelay: StartDelay): Array<Pair<String, Any?>> = when (startDelay) {
+        is FixedDelay -> arrayOf("startDelayMode" to "fixed")
+        is RandomDelay -> arrayOf(
+            "startDelayMode" to "random",
+            "minDelayMs" to startDelay.minDelay.inWholeMilliseconds,
+            "maxDelayMs" to startDelay.maxDelay.inWholeMilliseconds,
+        )
     }
 
     /**

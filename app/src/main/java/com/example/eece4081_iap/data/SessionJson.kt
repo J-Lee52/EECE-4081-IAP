@@ -1,6 +1,7 @@
 package com.example.eece4081_iap.data
 
 import com.example.eece4081_iap.domain.FixedDelay
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
 import org.json.JSONArray
@@ -22,6 +23,10 @@ object SessionJson {
             is FixedDelay -> JSONObject()
                 .put("type", "fixed")
                 .put("nanos", delay.duration.inWholeNanoseconds)
+            is RandomDelay -> JSONObject()
+                .put("type", "random")
+                .put("minNanos", delay.minDelay.inWholeNanoseconds)
+                .put("maxNanos", delay.maxDelay.inWholeNanoseconds)
         }
         val shots = JSONArray()
         session.shots.forEach { shot ->
@@ -48,6 +53,10 @@ object SessionJson {
         val delayJson = settingsJson.getJSONObject("startDelay")
         val startDelay = when (val type = delayJson.getString("type")) {
             "fixed" -> FixedDelay(delayJson.getLong("nanos").nanoseconds)
+            "random" -> RandomDelay(
+                minDelay = delayJson.getLong("minNanos").nanoseconds,
+                maxDelay = delayJson.getLong("maxNanos").nanoseconds,
+            )
             else -> throw IllegalArgumentException("Unknown start delay type: $type")
         }
         val settings = TimerSettings(
