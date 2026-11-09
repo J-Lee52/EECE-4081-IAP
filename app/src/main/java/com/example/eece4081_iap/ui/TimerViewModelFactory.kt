@@ -11,6 +11,7 @@ import com.example.eece4081_iap.app.MainThreadScheduler
 import com.example.eece4081_iap.audio.AndroidAudioInput
 import com.example.eece4081_iap.audio.AndroidBeepPlayer
 import com.example.eece4081_iap.data.FileSessionRepository
+import com.example.eece4081_iap.data.FileSettingsRepository
 import com.example.eece4081_iap.engine.TimerEngine
 import java.io.File
 import java.util.concurrent.Executors
@@ -42,6 +43,7 @@ fun timerViewModelFactory(): ViewModelProvider.Factory = viewModelFactory {
             postToMain = { action -> mainHandler.post(action) },
             background = ioThread,
             log = log,
+            settingsRepository = FileSettingsRepository(File(application.filesDir, "settings.json")),
         )
     }
 }
