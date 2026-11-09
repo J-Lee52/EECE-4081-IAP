@@ -1,12 +1,12 @@
 package com.example.eece4081_iap.ui
 
-import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.eece4081_iap.app.AndroidClock
+import com.example.eece4081_iap.app.LogcatEventLog
 import com.example.eece4081_iap.app.MainThreadScheduler
 import com.example.eece4081_iap.audio.AndroidAudioInput
 import com.example.eece4081_iap.audio.AndroidBeepPlayer
@@ -29,16 +29,19 @@ fun timerViewModelFactory(): ViewModelProvider.Factory = viewModelFactory {
         val ioThread = Executors.newSingleThreadExecutor { task ->
             Thread(task, "ShotTimer-io").apply { isDaemon = true }
         }
+        val log = LogcatEventLog()
         TimerViewModel(
             engine = TimerEngine(
                 audioInput = AndroidAudioInput(),
                 beepPlayer = AndroidBeepPlayer(),
                 clock = AndroidClock(),
                 scheduler = MainThreadScheduler(),
+                log = log,
             ),
-            repository = FileSessionRepository(File(application.filesDir, "sessions")),
+            repository = FileSessionRepository(File(application.filesDir, "sessions"), log),
             postToMain = { action -> mainHandler.post(action) },
             background = ioThread,
+            log = log,
         )
     }
 }

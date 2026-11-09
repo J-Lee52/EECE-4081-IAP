@@ -37,7 +37,7 @@ class AndroidAudioInput(
 
     @SuppressLint("MissingPermission") // the caller checks RECORD_AUDIO before start()
     @Synchronized
-    override fun start(onSamples: (ShortArray) -> Unit) {
+    override fun start(onSamples: (ShortArray) -> Unit, onError: (AudioInputError) -> Unit) {
         check(capture == null) { "Microphone is already recording" }
 
         val chunkSamples = sampleRate * chunkMillis / 1000
@@ -74,16 +74,16 @@ class AndroidAudioInput(
         val run = Capture(recorder)
         capture = run
         thread(name = "ShotTimer-audio", isDaemon = true) {
-            val buffer = ShortArray(chunkSamples)
             try {
-                while (run.running) {
-                    val read = recorder.read(buffer, 0, buffer.size)
-                    if (read < 0) break // error such as ERROR_DEAD_OBJECT
-                    if (read == 0) continue
-                    if (!run.running) break
-                    // Copy: the same array is reused for the next read.
-                    onSamples(buffer.copyOf(read))
-                }
+                // A negative read (such as ERROR_DEAD_OBJECT) is reported to
+                // onError unless stop() caused it; see runCaptureLoop.
+                runCaptureLoop(
+                    buffer = ShortArray(chunkSamples),
+                    read = { buffer -> recorder.read(buffer, 0, buffer.size) },
+                    isRunning = { run.running },
+                    onSamples = onSamples,
+                    onError = onError,
+                )
             } finally {
                 recorder.release()
             }
@@ -97,7 +97,7 @@ class AndroidAudioInput(
         run.running = false
         try {
             run.recorder.stop() // makes a blocked read() return
-        } catch (e: IllegalStateException) {
+        } catch (_: IllegalStateException) {
             // already stopped; the audio thread still releases the recorder
         }
     }

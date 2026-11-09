@@ -11,7 +11,10 @@ import com.example.eece4081_iap.domain.ShootingSession
  *
  *   Idle ──────────┐
  *                  ├──> Preparing ──> WaitingForStart ──> Recording ──> Completed
- *   Completed ─────┘        │
+ *   Completed ─────┘        │                │
+ *                           │                └──> Idle   (run abandoned before
+ *                           │                             Recording: no beep, or
+ *                           │                             the microphone failed)
  *                           └──> Idle   (the microphone could not be opened)
  *
  * TimerEngine asks [canMoveTo] before every change instead of keeping its
@@ -35,7 +38,7 @@ enum class TimerState {
     fun canMoveTo(next: TimerState): Boolean = when (this) {
         Idle, Completed -> next == Preparing
         Preparing -> next == WaitingForStart || next == Idle
-        WaitingForStart -> next == Recording
+        WaitingForStart -> next == Recording || next == Idle
         Recording -> next == Completed
     }
 }
@@ -49,4 +52,17 @@ data class TimerSnapshot(
     val state: TimerState,
     val session: ShootingSession?,
     val statistics: SessionStatistics,
+    /** The current run's id for log records; null before the first Start. */
+    val runId: String? = null,
+    /** Why the latest run ended early, or null. Cleared by the next Start. */
+    val problem: RunProblem? = null,
 )
+
+/** A hardware failure that ended a run early. */
+enum class RunProblem {
+    /** The start beep could not be played, so the run was abandoned before Recording. */
+    BEEP_UNAVAILABLE,
+
+    /** The microphone stopped delivering sound, so the run was ended. */
+    MICROPHONE_LOST,
+}

@@ -46,7 +46,7 @@ fun TimerScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         permissionDenied = !granted
-        if (granted) viewModel.start()
+        if (granted) viewModel.start() else viewModel.microphonePermissionDenied()
     }
 
     val onStartClicked = {

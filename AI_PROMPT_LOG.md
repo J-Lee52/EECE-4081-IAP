@@ -568,3 +568,84 @@ Decisions I made during the prompt:
 Before the refactor: 94 of 94 tests passed. After the refactor: the same 94 tests passed, with no test file changed.
 
 CI run on the pull request: run #18 of `Continuous_Integration` on commit `3fe9679` passed in about 4 minutes. Every step succeeded, including `Run unit tests` (with the Robolectric acceptance test) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts. The downloaded `unit-test-report` shows 94 tests, 0 failures, 0 skipped, and 100% successful, in 15.922 s, with the same per-class counts as the before and after runs; `ThinSliceAcceptanceTest` took 14.058 s of that under Robolectric.
+
+
+## Claude Code — M8 Structured Logging and Runbook
+
+### Prompt #13
+
+> The next assignment IAP8 has the following details but I do not think the current state of the project is ready for the assignment:
+
+Followed by the M8 assignment text, pasted unchanged: add structured logging with a correlating identifier so one operation can be traced, and write one runbook entry for a plausible failure, starting from the symptom and usable by someone other than the author.
+
+### AI Output
+
+Claude Code first checked the project against the assignment. The app had no structured logging (one free-text `Log.w`). The session id was only created at the start beep, so failures before the beep had no id. Logging from the engine directly would break the JVM tests. It proposed adding logging as an injected port, like `Clock`, and asked three questions.
+
+I chose:
+
+- **Correlating id:** a new run id each time Start is tapped.
+- **Runbook:** "Shots aren't counted".
+- **Destination:** Logcat, one JSON object per line.
+
+Claude Code then:
+
+- **Logging port:** added `EventLog` and `LogRecord` (pure Kotlin) with fixed top-level fields: `v`, `ts`, `level`, `component`, `event`, `runId`, `sessionId`, and a nested `data` object. It also added `LogJson`, a hand-written JSON formatter, and `LogcatEventLog`, which writes one line per record under the tag `ShotTimer`. Every new constructor parameter defaults to no logging, so the existing tests did not change.
+- **Events logged:**
+  - `TimerEngine`: `run.started`, `state.changed` (from M7's `moveTo()`), `microphone.opened` and `microphone.open_failed`, `beep.started`, `shot.recorded`, `shot.ignored` with its reason, a once-a-second `audio.level` (loudest sound against the threshold), and `run.stopped` with a summary.
+  - `TimerViewModel`: `session.saved`, `session.save_failed`, `session.not_saved`, `history.loaded` and `permission.denied`.
+  - `FileSessionRepository`: `session.file_skipped`.
+  - `AndroidAudioInput`: `microphone.read_error`.
+  - `AndroidBeepPlayer`: `beep.unavailable`, replacing its free-text `Log.w`.
+- **Tests:** added 15 (`LogJsonTest` 5, `RunTraceLoggingTest` 9, `FileSessionRepositoryTest` 1). The trace test checks that one Start produces the expected sequence of records, all with one `runId`, across the engine and the ViewModel, through to the saved session. 109 of 109 tests passed (94 earlier plus 15 new).
+- **Runbook:** wrote `docs/runbook/RB-001-shots-not-counted.md`. It starts from the symptom ("Shots: 0"). It gives the steps to capture and filter the log, a table matching what the log shows to a cause and an action, how to confirm the fix, and how to escalate.
+- **Device capture:** installed the app on my phone and captured the log using the runbook's own step 1, while I made a normal run (claps) and a quiet run. All 50 records parsed as JSON with the same eight fields. The runbook's `findstr` filter returned exactly the 33 lines of the normal run.
+
+Claude Code found and fixed one mistake in its own runbook from the capture. Row E originally said a `maxPeak` "close to zero (below about 0.02)" meant a muted microphone. But my phone in a quiet room measured 0.019–0.049, so a stranger could have misdiagnosed a working microphone. Row E was changed to "exactly 0.0".
+
+### Code Changes
+
+- New: `logging/EventLog.kt`, `logging/LogJson.kt`, `app/LogcatEventLog.kt`, `docs/runbook/RB-001-shots-not-counted.md`, `evidence/m8/`.
+- New tests: `logging/LogJsonTest.kt`, `logging/CapturingEventLog.kt` (test helper), `ui/RunTraceLoggingTest.kt`, `audio/CaptureLoopTest.kt`.
+- New after review: `audio/CaptureLoop.kt`; `RunProblem` in `TimerState.kt`.
+- Edited: `TimerEngine.kt`, `TimerState.kt` (`runId` added to `TimerSnapshot`), `TimerViewModel.kt`, `TimerViewModelFactory.kt`, `TimerScreen.kt`, `FileSessionRepository.kt`, `AudioInput.kt` and `BeepPlayer.kt` (error callbacks), `AndroidAudioInput.kt`, `AndroidBeepPlayer.kt`, `EngineFakes.kt` (fake error callbacks), `FileSessionRepositoryTest.kt` (one new test).
+- Branch `m8-observability`. Commit: `cb28811`, in pull request #8. This log entry was added in a second commit on the same pull request, so that it could record the commit hash and the CI result.
+
+### Diff
+
+**Changes from Claude Code's initial output.** After reviewing the initial output, I asked for these changes, and Claude Code made the edits at my direction:
+
+1. **Microphone read errors are now on the affected run's trace.** In the initial output, `AndroidAudioInput` logged `microphone.read_error` itself, so the record had no `runId` or `sessionId`. That made a read failure hard to link to the run it broke, and runbook step 2's `runId` filter would have hidden the line. I asked for the engine to own the adapter's error callback, or for a run-scoped logging context. Claude Code added an `onError` callback to the `AudioInput` port and a small `AudioInputError` type. `AndroidAudioInput` now only reports the error; it no longer logs. `TimerEngine` captures the `runId` that opened the microphone and logs `microphone.read_error` against that run, with the `sessionId` and state if that run is still current. Two tests were added: a read error appears on the affected run's trace, and a late error is credited to the run that owned the microphone, not a newer run. 111 of 111 tests passed afterwards.
+2. **An unavailable beep is now on the run's trace as well.** Claude Code pointed out that `AndroidBeepPlayer` had the same problem: it logged `beep.unavailable` itself, with no `runId`, and runbook row H tells the operator to look for that line. I agreed to fix it the same way. Claude Code added an `onUnavailable` callback and a `BeepError` type to the `BeepPlayer` port. `AndroidBeepPlayer` now only reports; it no longer logs. `TimerEngine` logs `beep.unavailable` against the run that asked for the beep. One test was added. 112 of 112 tests passed afterwards, and neither audio adapter writes log records any more.
+
+I then reviewed the result again and asked for the following changes, which Claude Code made at my direction:
+
+3. **A test that `stop()` is not reported as a read error.** I asked to keep the test confirming that `AndroidAudioInput`'s `run.running` check stops `stop()` from producing a false read error. Claude Code pointed out that no such test existed, because that code only runs on a device. It moved the read loop into a pure-Kotlin `runCaptureLoop()`, which `AndroidAudioInput` now calls, and added `CaptureLoopTest` (5 tests), including that a read error caused by `stop()` is not reported.
+4. **An old capture cannot affect a newer run.** I asked for state handling to use the same ownership check as the run-id logging. Claude Code tagged every hardware callback with the run that started it: the start delay, the beep finishing, audio samples and audio errors. A callback from an earlier run is ignored and logged as `callback.ignored` (reason `stale_run`) on its own run's trace. Tests show that a late error or late samples from an old capture neither change, end, nor add shots to a newer run, and that a stale delay or beep callback cannot start the beep or Recording in a later run.
+5. **A beep failure is visible to the user.** I asked for at least a warning in the UI, and preferably for a beep failure to end the run, because the product does not support silent operation. Claude Code made a beep failure end the run before Recording (a new `WaitingForStart → Idle` transition in `TimerState.canMoveTo`, and a `run.abandoned` record). `TimerSnapshot.problem` tells the screen why, and the user sees "The start beep could not be played…". Claude Code proposed treating a microphone failure the same way, and I agreed: it ends the run (Recording → Completed, with the shots so far kept and saved) and shows "The microphone stopped working…".
+6. **Logging failures cannot break the engine.** `EventLog.bestEffort()` wraps any logger so that an exception from it is swallowed. `TimerEngine`, `TimerViewModel` and `FileSessionRepository` apply it to whatever logger they are given. A test runs a full session with a logger that always throws.
+7. **Every history read in `TimerViewModel` is protected.** A failing `loadAll()`, at startup or after a save, is now logged as `history.load_failed`. It shows "Could not load past sessions." and keeps the completed session and the history already on screen. Two tests were added.
+8. **No raw exception messages in normal logs.** Exception messages moved from `data` to a separate `diagnostics` field. That field is written (inside `data`) only in verbose diagnostic mode, which an operator turns on with `adb shell "setprop log.tag.ShotTimer VERBOSE"`. Normal records keep only error type names and codes. Claude Code tested the commands on my phone and found that its first reset command (`setprop … ""`) does not work, because `adb` drops the empty argument. The runbook now uses the form that worked in PowerShell, Command Prompt and Git Bash.
+9. **Replacing a saved file can no longer lose the previous copy.** `FileSessionRepository.save()` used to delete the previous copy when the first rename failed. It now moves the previous copy aside and puts it back if the replacement fails. On load, it restores a copy left aside by an interrupted save. `java.nio`'s atomic move was not used because it needs Android 8, and the app's `minSdk` is 24. Three tests were added.
+
+10. **Echoes are counted, not logged one by one.** I pointed out that `shot.ignored` is useful for diagnosing echoes, but a long noisy run could flood Logcat. I asked for cooldown ignores to be aggregated, with individual records still available in a debug mode. `audio.level` now carries `ignoredCooldown` (echoes ignored in that second), and `run.stopped` carries the run's total. Individual `shot.ignored` records are written only when the log asks for detail: a new `EventLog.wantsDetail()`, false by default, which `LogcatEventLog` answers from the same verbose setting as the diagnostics. A test runs 60 seconds of a loud sound every 50 ms. It produces 300 shots, 900 echoes counted, about one `audio.level` record per second, and no `shot.ignored` records. 134 of 134 tests passed.
+
+The runbook was updated to match: the symptom list now includes the new on-screen messages, row C and a new row H describe the runs that now end on a microphone or beep failure, row G uses the new echo count, and the escalation steps include verbose mode.
+
+**Evidence recaptured with the final build.** The first phone capture was made before changes 1–10, so it showed individual `shot.ignored` lines and lacked the new `reason` and `ignoredCooldown` fields. I made the runs again on my phone with the final build while Claude Code captured the log using the runbook's step 1, and the old capture was replaced. In my first new quiet run one sound was loud enough to count as a shot, so I repeated the quiet run.
+
+**Commit check warnings.** When I first tried to commit, Android Studio's code analysis reported 11 warnings, and I asked Claude Code to review them. None was a bug. Claude Code fixed all 11: unused imports and unused `catch` parameters (some from M5), a redundant `Executor { … }` wrapper and a `var` that could be `val` in the tests, and an unnecessary `!!`. It also found that the class comment in `AndroidBeepPlayer` was now wrong: it still said a missing beep is silently skipped, which change 5 had replaced. The comment was rewritten. 134 of 134 tests still passed.
+
+Decisions I made during the prompt:
+
+- **Correlating id:** a new run id per Start tap, rather than reusing the session id.
+- **Runbook failure:** "Shots aren't counted".
+- **Log destination:** Logcat as one JSON object per line, rather than also writing a file on the phone.
+- **Device capture:** I made the runs on my phone while Claude Code captured the log.
+- **Changes after review:** I asked for changes 1 and 3–10 after reviewing the output, and agreed to change 2 and to the microphone-failure part of change 5, both proposed by Claude Code.
+
+### Result
+
+134 of 134 JVM tests passed locally (109 after the initial output, 112 after changes 1 and 2, 132 after changes 3 to 9, 134 after change 10). The final phone capture is in `evidence/m8/`. All 52 records parse as JSON with the same eight fields. One run, `runId` 5b1ef293, is traced in 19 lines from Start to `session.saved`; runbook step 2's `findstr` returns exactly those lines. The quiet run `f18d1fb9` shows the runbook's symptom (row F: loudest sounds 0.033–0.212 against a 0.5 threshold, 0 shots).
+
+CI run on the pull request: run #21 of `Continuous_Integration` on commit `cb28811` passed in about 4 minutes. Every step succeeded, including `Run unit tests` (with the Robolectric acceptance test and the new logging tests) and `Generate coverage report`. The run uploaded the `unit-test-report`, `coverage-report` and `app-debug-apk` artifacts.

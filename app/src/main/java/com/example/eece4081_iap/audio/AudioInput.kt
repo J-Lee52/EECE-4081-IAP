@@ -15,11 +15,22 @@ interface AudioInput {
      * 16-bit PCM samples, possibly from a background thread. A buffer is only
      * valid during the callback; copy it if it must be kept.
      *
+     * [onError] is called at most once if capturing fails after it started
+     * (for example, the audio device was lost). No more samples follow it.
+     * The implementation only reports the failure; the caller decides what
+     * to do about it and logs it against the run that owns the capture.
+     *
      * Throws if the microphone cannot be opened (for example, when the
      * RECORD_AUDIO permission has not been granted).
      */
-    fun start(onSamples: (ShortArray) -> Unit)
+    fun start(onSamples: (ShortArray) -> Unit, onError: (AudioInputError) -> Unit)
 
     /** Stops capturing and releases the microphone. Safe to call when not started. */
     fun stop()
 }
+
+/**
+ * A capture failure reported by [AudioInput] after capturing had started.
+ * [code] is the platform's error code (for AudioRecord, a negative read result).
+ */
+data class AudioInputError(val code: Int, val message: String)

@@ -9,6 +9,11 @@ import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.engine.TimerEngine
 import com.example.eece4081_iap.engine.TimerSnapshot
 import com.example.eece4081_iap.engine.TimerState
+import com.example.eece4081_iap.logging.EventLog
+import com.example.eece4081_iap.logging.LogLevel
+import com.example.eece4081_iap.logging.LogRecord
+import com.example.eece4081_iap.logging.bestEffort
+import com.example.eece4081_iap.engine.RunProblem
 import java.util.concurrent.Executor
 
 /**
@@ -28,7 +33,10 @@ class TimerViewModel(
     private val repository: SessionRepository,
     private val postToMain: (() -> Unit) -> Unit,
     private val background: Executor,
+    log: EventLog = EventLog.NONE,
 ) : ViewModel() {
+
+    private val log: EventLog = log.bestEffort()
 
     /** The timer as the screen should draw it right now. */
     var snapshot by mutableStateOf(engine.snapshot())
@@ -43,6 +51,7 @@ class TimerViewModel(
         private set
 
     private var lastState = snapshot.state
+    private var lastProblem: RunProblem? = null
 
     init {
         engine.listener = { latest -> postToMain { onSnapshot(latest) } }
@@ -67,33 +76,90 @@ class TimerViewModel(
         errorMessage = null
     }
 
+    /** Called by the screen when the person refuses the microphone permission. */
+    fun microphonePermissionDenied() {
+        record(LogLevel.WARN, "permission.denied", null, null, "permission" to "RECORD_AUDIO")
+    }
+
     private fun onSnapshot(latest: TimerSnapshot) {
         val justCompleted = latest.state == TimerState.Completed && lastState != TimerState.Completed
+        val problem = latest.problem
+        if (problem != null && problem != lastProblem) errorMessage = messageFor(problem)
         lastState = latest.state
+        lastProblem = problem
         snapshot = latest
-        if (justCompleted) saveCompleted(latest.session)
+        if (justCompleted) saveCompleted(latest.session, latest.runId)
+    }
+
+    private fun messageFor(problem: RunProblem): String = when (problem) {
+        RunProblem.BEEP_UNAVAILABLE ->
+            "The start beep could not be played, so the run was stopped before recording. " +
+                "Check the phone's volume and try again."
+        RunProblem.MICROPHONE_LOST ->
+            "The microphone stopped working, so the run was ended. Any shots already recorded were kept."
     }
 
     /** A session with no shots is not worth keeping, so it is not saved. */
-    private fun saveCompleted(session: ShootingSession?) {
-        if (session == null || session.shots.isEmpty()) return
+    private fun saveCompleted(session: ShootingSession?, runId: String?) {
+        if (session == null || session.shots.isEmpty()) {
+            record(LogLevel.INFO, "session.not_saved", runId, session?.id, "reason" to "no_shots")
+            return
+        }
         background.execute {
             try {
                 repository.save(session)
             } catch (e: Exception) {
+                record(
+                    LogLevel.ERROR, "session.save_failed", runId, session.id,
+                    "error" to e.javaClass.simpleName,
+                    diagnostics = mapOf("message" to e.message),
+                )
                 postToMain { errorMessage = "Could not save the session." }
                 return@execute
             }
-            val all = repository.loadAll()
-            postToMain { history = all }
+            record(LogLevel.INFO, "session.saved", runId, session.id, "shots" to session.shots.size)
+            loadHistory(runId)
         }
     }
 
     private fun refreshHistory() {
-        background.execute {
-            val all = repository.loadAll()
-            postToMain { history = all }
+        background.execute { loadHistory(runId = null) }
+    }
+
+    /**
+     * Reloads the saved sessions on the background thread. A read failure is
+     * logged and shown to the person; the history already on screen and the
+     * current (for example, just completed) session stay as they are.
+     */
+    private fun loadHistory(runId: String?) {
+        val all = try {
+            repository.loadAll()
+        } catch (e: Exception) {
+            record(
+                LogLevel.ERROR, "history.load_failed", runId, null,
+                "error" to e.javaClass.simpleName,
+                diagnostics = mapOf("message" to e.message),
+            )
+            postToMain { errorMessage = "Could not load past sessions." }
+            return
         }
+        record(LogLevel.INFO, "history.loaded", runId, null, "sessions" to all.size)
+        postToMain { history = all }
+    }
+
+    private fun record(
+        level: LogLevel,
+        event: String,
+        runId: String?,
+        sessionId: String?,
+        vararg data: Pair<String, Any?>,
+        diagnostics: Map<String, Any?> = emptyMap(),
+    ) {
+        log.record(LogRecord(level, COMPONENT, event, runId, sessionId, linkedMapOf(*data), diagnostics))
+    }
+
+    private companion object {
+        const val COMPONENT = "viewmodel"
     }
 
     override fun onCleared() {
