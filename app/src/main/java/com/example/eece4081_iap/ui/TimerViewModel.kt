@@ -164,8 +164,8 @@ class TimerViewModel(
 
     override fun onCleared() {
         engine.listener = null
-        // Releases the microphone if a session is recording. The engine does
-        // not yet allow cancelling during the start delay (known limitation).
-        engine.stop()
+        // Ends the run at any stage, including the start delay, so the
+        // microphone is never left open after the screen has gone.
+        engine.cancel()
     }
 }

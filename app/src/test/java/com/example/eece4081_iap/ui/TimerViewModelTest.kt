@@ -20,7 +20,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
-import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
 
 class TimerViewModelTest {
@@ -62,7 +61,7 @@ class TimerViewModelTest {
         engine = engine,
         repository = repository,
         postToMain = { it() },
-        background = Executor { it.run() },
+        background = { it.run() },
     )
 
     private fun reachRecording(viewModel: TimerViewModel) {
@@ -212,6 +211,33 @@ class TimerViewModelTest {
 
         assertFalse(audio.started)
         assertEquals(TimerState.Completed, engine.snapshot().state)
+    }
+
+    @Test
+    fun closingTheAppDuringTheStartDelay_releasesTheMicrophone() {
+        val store = ViewModelStore()
+        val viewModel = viewModelIn(store, InMemoryRepository())
+        viewModel.start() // waiting for the start delay
+        assertTrue(audio.started)
+
+        store.clear()
+
+        assertFalse("microphone must not stay open after the screen is gone", audio.started)
+        assertEquals(TimerState.Idle, engine.snapshot().state)
+    }
+
+    @Test
+    fun closingTheAppWhileTheBeepPlays_releasesTheMicrophoneAndNeverRecords() {
+        val store = ViewModelStore()
+        val viewModel = viewModelIn(store, InMemoryRepository())
+        viewModel.start()
+        scheduler.runNext() // beep playing
+
+        store.clear()
+        beep.finish() // the beep ends after the screen has gone
+
+        assertFalse(audio.started)
+        assertEquals(TimerState.Idle, engine.snapshot().state)
     }
 
     @Test
