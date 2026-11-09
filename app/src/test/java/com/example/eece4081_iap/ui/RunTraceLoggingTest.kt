@@ -3,6 +3,7 @@ package com.example.eece4081_iap.ui
 import com.example.eece4081_iap.audio.AudioInputError
 import com.example.eece4081_iap.audio.BeepError
 import com.example.eece4081_iap.data.SessionRepository
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
 import com.example.eece4081_iap.engine.FakeAudioInput
@@ -427,6 +428,33 @@ class RunTraceLoggingTest {
         assertEquals("cancelled", abandoned.data["reason"])
         assertEquals("run-1", abandoned.runId)
         assertNull("no warning for a requested cancel", viewModel.errorMessage)
+    }
+
+    @Test
+    fun runStarted_recordsTheStartDelayModeAndTheDelayUsed() {
+        viewModel.start()
+
+        val started = log.only("run.started")
+        assertEquals("fixed", started.data["startDelayMode"])
+        assertEquals(3000L, started.data["startDelayMs"])
+    }
+
+    @Test
+    fun runStarted_forARandomRange_recordsTheRangeAndTheDelayActuallyChosen() {
+        val randomLog = CapturingEventLog()
+        val randomEngine = TimerEngine(
+            audio, beep, clock, scheduler,
+            initialSettings = TimerSettings.DEFAULT.copy(startDelay = RandomDelay(2.seconds, 4.seconds)),
+            log = randomLog,
+        )
+
+        randomEngine.start()
+
+        val started = randomLog.only("run.started")
+        assertEquals("random", started.data["startDelayMode"])
+        assertEquals(2000L, started.data["minDelayMs"])
+        assertEquals(4000L, started.data["maxDelayMs"])
+        assertEquals(scheduler.scheduled.single().delay.inWholeMilliseconds, started.data["startDelayMs"])
     }
 
     @Test

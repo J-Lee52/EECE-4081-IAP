@@ -1,6 +1,7 @@
 package com.example.eece4081_iap.data
 
 import com.example.eece4081_iap.domain.FixedDelay
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
 import org.junit.Assert.assertEquals
@@ -43,6 +44,14 @@ class SessionJsonTest {
         assertEquals(null, restored.shots[0].splitTime)
         assertEquals(600.milliseconds, restored.shots[1].splitTime)
         assertEquals(900.milliseconds, restored.shots[2].splitTime)
+    }
+
+    @Test
+    fun roundTrip_preservesARandomRangeStartDelay() {
+        val randomSettings = customSettings.copy(startDelay = RandomDelay(1500.milliseconds, 4.seconds))
+        val session = ShootingSession("random-1", 1_000L, randomSettings).recordShot(1.seconds)
+
+        assertEquals(session, SessionJson.decode(SessionJson.encode(session)))
     }
 
     @Test

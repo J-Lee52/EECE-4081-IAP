@@ -737,3 +737,46 @@ None.
 147 of 147 JVM tests passed locally.
 
 CI run on the pull request: run #28 of `Continuous_Integration` on commit `d324dfa` passed in about 1.5 minutes. Every step succeeded, including `Run unit tests` (with the updated Robolectric acceptance test).
+
+
+## Claude Code — Requirements Alignment 2: Random Range Start Delay (US03, US01, domain model)
+
+### Prompt #16
+
+This entry continues the request in Prompt #15: the second feature branch, `random-start-delay`, started after pull request #11 was merged.
+
+### AI Output
+
+US03 says that in Random Range mode the app picks a delay between a configured minimum and maximum and waits for it. US01 says the minimum may not exceed the maximum. The domain model (`shot_timer_domain_model.mmd`) already shows `RandomDelay(minDelay, maxDelay)`, but the code had only `FixedDelay`. Claude Code:
+
+- **Domain:** added `RandomDelay(minDelay, maxDelay)` to the sealed `StartDelay`. It rejects a negative minimum and a minimum above the maximum; equal values are allowed and behave like a fixed delay. `StartDelay` gained `chooseDuration(random)`, so the domain owns the rule for picking a delay: `FixedDelay` always returns its duration, and `RandomDelay` picks evenly between its minimum and maximum, both included.
+- **Engine:** `TimerEngine` takes an injectable `Random` (default `Random.Default`) so tests can control the choice. It chooses the delay once per run in `start()` and waits for it. `run.started` now records `startDelayMode` (`fixed` or `random`), the range (`minDelayMs`, `maxDelayMs`) for Random Range, and `startDelayMs`, the delay actually chosen.
+- **Storage:** `SessionJson` saves and loads a Random Range delay (`"type":"random"` with `minNanos` and `maxNanos`). The `"fixed"` format is unchanged, so sessions saved earlier still load.
+- **Not in this branch:** choosing Random Range on screen belongs to the settings screen (`timer-settings-screen`), so until then the app keeps using the fixed 3-second default.
+
+Tests (11 new):
+
+- `StartDelayTest` (7): a fixed delay always waits its duration; a random delay can choose exactly its minimum and exactly its maximum, always stays within its range, and varies across 1,000 choices; equal minimum and maximum; a minimum above the maximum and a negative minimum are rejected; settings accept a random delay.
+- `SessionJsonTest` (1): a Random Range delay survives saving and loading.
+- `TimerEngineTest` (1): the engine waits for a delay chosen within the range and chooses afresh each run.
+- `RunTraceLoggingTest` (2): `run.started` records the mode and delay for a fixed delay, and the range and chosen delay for a random one.
+
+158 of 158 tests passed.
+
+### Code Changes
+
+- New: `domain/StartDelayTest.kt`.
+- Edited: `domain/TimerSettings.kt`, `engine/TimerEngine.kt`, `data/SessionJson.kt`, and tests in `SessionJsonTest.kt`, `TimerEngineTest.kt`, `RunTraceLoggingTest.kt`.
+- Branch `random-start-delay`. Commit: `a6b576d`, in pull request #12. This log entry was added in a second commit on the same pull request.
+
+### Diff
+
+None.
+
+**Commit check warnings.** Android Studio reported 7 warnings when I committed. All were the "`assertEquals()` between `long` and `Duration`" false positive on test lines that already existed on `master` (`SessionJsonTest`, `TimerEngineTest`), moved down one line by a new import. I committed anyway.
+
+### Result
+
+158 of 158 JVM tests passed locally.
+
+CI run on the pull request: run #31 of `Continuous_Integration` on commit `a6b576d` passed in about 1.5 minutes. Every step succeeded.

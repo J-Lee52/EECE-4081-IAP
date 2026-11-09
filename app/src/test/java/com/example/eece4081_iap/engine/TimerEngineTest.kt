@@ -1,6 +1,7 @@
 package com.example.eece4081_iap.engine
 
 import com.example.eece4081_iap.domain.FixedDelay
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.TimerSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,6 +9,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -334,6 +336,30 @@ class TimerEngineTest {
 
         assertTrue(shots().isEmpty())
         assertEquals(strict, engine.snapshot().session!!.settings)
+    }
+
+    // --- Random Range start delay (US03) ---
+
+    @Test
+    fun aRandomRangeDelay_waitsForADelayChosenWithinTheRange_andChoosesAfreshEachRun() {
+        val range = RandomDelay(minDelay = 2.seconds, maxDelay = 4.seconds)
+        val randomEngine = TimerEngine(
+            audioInput = audio,
+            beepPlayer = beep,
+            clock = clock,
+            scheduler = scheduler,
+            initialSettings = settings.copy(startDelay = range),
+            random = Random(7),
+        )
+        val sameSequence = Random(7)
+
+        randomEngine.start()
+        randomEngine.cancel()
+        randomEngine.start()
+
+        val waited = scheduler.scheduled.map { it.delay }
+        assertEquals(List(2) { range.chooseDuration(sameSequence) }, waited)
+        assertTrue(waited.all { it in 2.seconds..4.seconds })
     }
 
     // --- Cancel (the screen going away) ---
