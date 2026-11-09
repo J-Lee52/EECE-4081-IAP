@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,7 @@ import java.util.Date
 fun TimerScreen(
     modifier: Modifier = Modifier,
     viewModel: TimerViewModel = viewModel(factory = timerViewModelFactory()),
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var permissionDenied by remember { mutableStateOf(false) }
@@ -76,10 +79,19 @@ fun TimerScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Text("Shot Timer", style = MaterialTheme.typography.headlineMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Shot Timer", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                // Settings can be changed only while no run is in progress (US01).
+                if (onOpenSettings != null) {
+                    TextButton(onClick = onOpenSettings, enabled = state.isAtRest) { Text("Settings") }
+                }
+            }
         }
         item {
             Text(statusText(state), style = MaterialTheme.typography.titleMedium)
+        }
+        item {
+            Text(SettingsDraft.summary(viewModel.settings), style = MaterialTheme.typography.bodySmall)
         }
         item {
             when {
