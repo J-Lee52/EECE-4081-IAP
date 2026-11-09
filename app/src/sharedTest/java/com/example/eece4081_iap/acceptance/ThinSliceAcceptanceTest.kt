@@ -185,7 +185,8 @@ class ThinSliceAcceptanceTest {
             firstRun.beep.finish()
         }
         assertShown("Recording — fire when ready")
-        assertShown("Shots: 0    Total: —")
+        assertShown("Shots: 0    Total time unavailable")
+        assertShown("Split statistics unavailable (needs at least 2 shots)")
 
         // When three shots are fired (with an echo and room noise in between).
         // The two splits differ, so fastest, average and slowest are distinct.
@@ -228,7 +229,7 @@ class ThinSliceAcceptanceTest {
 
         // Then the new run starts clean but still lists the saved session
         assertShown("Ready")
-        assertShown("Shots: 0    Total: —")
+        assertShown("Shots: 0    Total time unavailable")
         waitUntilShown("3 shots, total 2.35 s")
         assertShown("Past sessions")
     }
