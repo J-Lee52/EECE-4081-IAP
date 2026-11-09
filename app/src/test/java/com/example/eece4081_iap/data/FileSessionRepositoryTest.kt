@@ -2,6 +2,8 @@ package com.example.eece4081_iap.data
 
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
+import com.example.eece4081_iap.logging.CapturingEventLog
+import com.example.eece4081_iap.logging.LogLevel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -84,6 +86,59 @@ class FileSessionRepositoryTest {
         File(directory(), "bad.json").writeText("{ this is not valid")
 
         assertEquals(listOf(good), repository.loadAll())
+    }
+
+    @Test
+    fun aCorruptFile_isLoggedAsSkippedWithItsName() {
+        val log = CapturingEventLog()
+        File(directory().apply { mkdirs() }, "bad.json").writeText("{ this is not valid")
+
+        FileSessionRepository(directory(), log).loadAll()
+
+        val skipped = log.only("session.file_skipped")
+        assertEquals(LogLevel.WARN, skipped.level)
+        assertEquals("bad.json", skipped.data["file"])
+    }
+
+    @Test
+    fun aFailedReplacement_keepsThePreviouslySavedCopy() {
+        val original = session("a", 1_000L, 1200)
+        repository().save(original)
+        // A file system that refuses to move the new copy into place.
+        val failing = FileSessionRepository(directory(), rename = { from, to ->
+            if (from.name.endsWith(".tmp")) false else from.renameTo(to)
+        })
+
+        assertThrows(IOException::class.java) { failing.save(session("a", 1_000L, 1200, 1800)) }
+
+        assertEquals(listOf(original), repository().loadAll())
+        assertEquals(listOf("a.json"), directory().list()!!.toList())
+    }
+
+    @Test
+    fun replacingOnAFileSystemThatCannotRenameOverAFile_stillReplacesAndLeavesNoBackup() {
+        repository().save(session("a", 1_000L, 1200))
+        // Like some file systems: a rename onto an existing file fails.
+        val noOverwrite = FileSessionRepository(directory(), rename = { from, to ->
+            if (to.exists()) false else from.renameTo(to)
+        })
+        val updated = session("a", 1_000L, 1200, 1800)
+
+        noOverwrite.save(updated)
+
+        assertEquals(listOf(updated), repository().loadAll())
+        assertEquals(listOf("a.json"), directory().list()!!.toList())
+    }
+
+    @Test
+    fun aBackupLeftByAnInterruptedSave_isRestoredOnLoad() {
+        val saved = session("a", 1_000L, 1200)
+        repository().save(saved)
+        // The app stopped after moving the old copy aside and before replacing it.
+        File(directory(), "a.json").renameTo(File(directory(), "a.json.bak"))
+
+        assertEquals(listOf(saved), repository().loadAll())
+        assertTrue(File(directory(), "a.json").exists())
     }
 
     @Test

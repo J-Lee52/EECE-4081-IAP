@@ -1,0 +1,17 @@
+--------- beginning of main
+{"v":1,"ts":1794187398488,"level":"INFO","component":"engine","event":"run.started","runId":"f18d1fb9","sessionId":null,"data":{"threshold":0.5,"cooldownMs":200,"startDelayMs":3000}}
+{"v":1,"ts":1794187398488,"level":"INFO","component":"engine","event":"state.changed","runId":"f18d1fb9","sessionId":null,"data":{"from":"Completed","to":"Preparing"}}
+{"v":1,"ts":1794187398532,"level":"INFO","component":"engine","event":"microphone.opened","runId":"f18d1fb9","sessionId":null,"data":{}}
+{"v":1,"ts":1794187398533,"level":"INFO","component":"engine","event":"state.changed","runId":"f18d1fb9","sessionId":null,"data":{"from":"Preparing","to":"WaitingForStart"}}
+{"v":1,"ts":1794187401536,"level":"INFO","component":"engine","event":"beep.started","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{}}
+{"v":1,"ts":1794187401992,"level":"INFO","component":"engine","event":"state.changed","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"from":"WaitingForStart","to":"Recording"}}
+{"v":1,"ts":1794187403007,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":469,"buffers":101,"maxPeak":0.048,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187404027,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":1472,"buffers":102,"maxPeak":0.033,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187405045,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":2493,"buffers":102,"maxPeak":0.048,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187406048,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":3511,"buffers":100,"maxPeak":0.092,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187407067,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":4515,"buffers":102,"maxPeak":0.096,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187408087,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":5534,"buffers":102,"maxPeak":0.112,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187408606,"level":"DEBUG","component":"engine","event":"audio.level","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"fromMs":6554,"buffers":47,"maxPeak":0.212,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187408607,"level":"INFO","component":"engine","event":"run.stopped","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"reason":"user","shots":0,"recordedMs":7071,"buffersHeard":656,"maxPeak":0.212,"threshold":0.5,"ignoredCooldown":0}}
+{"v":1,"ts":1794187408607,"level":"INFO","component":"engine","event":"state.changed","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"from":"Recording","to":"Completed"}}
+{"v":1,"ts":1794187408613,"level":"INFO","component":"viewmodel","event":"session.not_saved","runId":"f18d1fb9","sessionId":"fd72a699-df16-4724-9faf-f53dc0697333","data":{"reason":"no_shots"}}
