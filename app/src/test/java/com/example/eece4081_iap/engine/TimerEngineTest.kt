@@ -336,6 +336,79 @@ class TimerEngineTest {
         assertEquals(strict, engine.snapshot().session!!.settings)
     }
 
+    // --- Cancel (the screen going away) ---
+
+    @Test
+    fun cancel_duringTheStartDelay_returnsToIdleAndReleasesTheMicrophone() {
+        assertTrue(engine.start())
+
+        assertTrue(engine.cancel())
+
+        assertEquals(TimerState.Idle, state())
+        assertFalse(audio.started)
+        assertNull(engine.snapshot().session)
+        assertNull("a requested cancel is not a problem", engine.snapshot().problem)
+    }
+
+    @Test
+    fun aDelayThatEndsAfterCancel_doesNotPlayTheBeep() {
+        engine.start()
+        engine.cancel()
+
+        scheduler.runNext() // the start delay ends anyway
+
+        assertEquals(0, beep.playCount)
+        assertEquals(TimerState.Idle, state())
+    }
+
+    @Test
+    fun cancel_whileTheBeepPlays_meansTheRunNeverRecords() {
+        engine.start()
+        scheduler.runNext() // beep playing
+
+        engine.cancel()
+        beep.finish()
+
+        assertEquals(TimerState.Idle, state())
+        assertNull(engine.snapshot().session)
+    }
+
+    @Test
+    fun cancel_whileRecording_completesTheSessionAndKeepsItsShots() {
+        startAndReachRecording()
+        clock.advance(1.seconds)
+        audio.emit(loud)
+
+        assertTrue(engine.cancel())
+
+        assertEquals(TimerState.Completed, state())
+        assertEquals(1, shots().size)
+        assertFalse(audio.started)
+    }
+
+    @Test
+    fun cancel_whenNoRunIsActive_isRejectedAndChangesNothing() {
+        assertFalse(engine.cancel()) // Idle
+        startAndReachRecording()
+        engine.stop()
+
+        assertFalse(engine.cancel()) // Completed
+        assertEquals(TimerState.Completed, state())
+    }
+
+    @Test
+    fun aNewRun_canStartAfterCancel() {
+        engine.start()
+        engine.cancel()
+        scheduler.runNext() // the cancelled run's delay still ends; it is ignored
+        assertEquals(0, beep.playCount)
+
+        startAndReachRecording()
+
+        assertEquals(TimerState.Recording, state())
+        assertEquals(2, audio.startCount)
+    }
+
     // --- Microphone failure ---
 
     @Test

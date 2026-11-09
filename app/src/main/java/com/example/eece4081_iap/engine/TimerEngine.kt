@@ -155,6 +155,33 @@ class TimerEngine(
     }
 
     /**
+     * Ends the active run at any stage and releases the microphone, for when
+     * the screen goes away (for example, the app is closed). Unlike [stop],
+     * which is the user's Stop button and only works while Recording:
+     *
+     * - WaitingForStart (the start delay, or the beep is playing): the run is
+     *   abandoned and the timer returns to Idle. A delay or beep callback that
+     *   arrives afterwards is ignored.
+     * - Recording: the run is completed as by [stop], keeping its shots.
+     *
+     * No problem is reported, because nothing went wrong. Returns false and
+     * changes nothing in Idle or Completed. (Preparing exists only inside
+     * [start], which holds the lock, so it cannot be seen here.)
+     */
+    @Synchronized
+    fun cancel(): Boolean {
+        when (state) {
+            TimerState.WaitingForStart -> abandonRun(problem = null)
+            TimerState.Recording -> finishRecording(reason = "cancelled")
+            else -> {
+                record(LogLevel.DEBUG, "cancel.rejected", "state" to state)
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
      * Stops the active session (US06). Allowed only while Recording; returns
      * false and changes nothing otherwise.
      */
@@ -187,14 +214,21 @@ class TimerEngine(
 
     /**
      * Ends a run that has not reached Recording: releases the microphone,
-     * discards the unstarted session and returns to Idle, recording why.
+     * discards the unstarted session and returns to Idle. [problem] says
+     * which hardware failure caused it (shown to the person), or null for a
+     * requested [cancel].
      */
-    private fun abandonRun(reason: RunProblem) {
+    private fun abandonRun(problem: RunProblem?) {
         audioInput.stop()
         session = null
         detector = null
-        problem = reason
-        record(LogLevel.WARN, "run.abandoned", "reason" to reason)
+        this.problem = problem
+        // A hardware problem is a warning; a requested cancel is routine.
+        if (problem != null) {
+            record(LogLevel.WARN, "run.abandoned", "reason" to problem)
+        } else {
+            record(LogLevel.INFO, "run.abandoned", "reason" to "cancelled")
+        }
         requireMoveTo(TimerState.Idle)
     }
 

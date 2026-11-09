@@ -417,6 +417,19 @@ class RunTraceLoggingTest {
     }
 
     @Test
+    fun cancelDuringTheStartDelay_isLoggedAsARoutineAbandonOnTheRunsTrace() {
+        viewModel.start()
+
+        engine.cancel()
+
+        val abandoned = log.only("run.abandoned")
+        assertEquals(LogLevel.INFO, abandoned.level)
+        assertEquals("cancelled", abandoned.data["reason"])
+        assertEquals("run-1", abandoned.runId)
+        assertNull("no warning for a requested cancel", viewModel.errorMessage)
+    }
+
+    @Test
     fun aFailedSave_isAnErrorCarryingBothIds() {
         repository.failOnSave = true
         startAndReachRecording()

@@ -13,8 +13,9 @@ import com.example.eece4081_iap.domain.ShootingSession
  *                  ├──> Preparing ──> WaitingForStart ──> Recording ──> Completed
  *   Completed ─────┘        │                │
  *                           │                └──> Idle   (run abandoned before
- *                           │                             Recording: no beep, or
- *                           │                             the microphone failed)
+ *                           │                             Recording: cancelled,
+ *                           │                             no beep, or the
+ *                           │                             microphone failed)
  *                           └──> Idle   (the microphone could not be opened)
  *
  * TimerEngine asks [canMoveTo] before every change instead of keeping its
