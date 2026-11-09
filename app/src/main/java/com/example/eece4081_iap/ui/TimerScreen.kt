@@ -108,16 +108,12 @@ fun TimerScreen(
         item { HorizontalDivider() }
         item {
             Text(
-                "Shots: ${stats.shotCount}    Total: ${stats.totalTime.orDash()}",
+                ResultsText.summary(stats),
                 style = MaterialTheme.typography.titleMedium,
             )
         }
         item {
-            Text(
-                "Fastest split: ${stats.fastestSplit.orDash()}\n" +
-                    "Average split: ${stats.averageSplit.orDash()}\n" +
-                    "Slowest split: ${stats.slowestSplit.orDash()}",
-            )
+            Text(ResultsText.splitStatistics(stats))
         }
         items(shots, key = { "shot-${it.shotNumber}" }) { shot ->
             Text(
@@ -136,7 +132,7 @@ fun TimerScreen(
         items(history, key = { "session-${it.id}" }) { session ->
             Text(
                 "${formatStart(session.startTime)} — ${session.shots.size} shots, " +
-                    "total ${session.shots.lastOrNull()?.timestamp.orDash()}",
+                    ResultsText.historyTotal(session.shots.lastOrNull()?.timestamp),
             )
         }
     }

@@ -692,7 +692,7 @@ While writing the tests, Claude Code's first version of "a new run can start aft
 
 ### Diff
 
-`<fill in: any changes I asked for or made after review, or "none">`
+None.
 
 **Commit check warnings.** When I first tried to commit, Android Studio's code analysis reported 6 warnings, all on test lines that already existed on `master`. Claude Code fixed one: a redundant `Executor { … }` in `TimerViewModelTest`, and the import it left unused. It advised leaving the other five: "`assertEquals()` between `long` and `Duration`" in `TimerEngineTest`. These are false positives, because Kotlin's `Duration` is stored as a number internally. The assertions do compare durations: the M6 fault survey's faults E, J and K were caught by exactly these lines. 143 of 143 tests still passed.
 
@@ -701,3 +701,39 @@ While writing the tests, Claude Code's first version of "a new run can start aft
 143 of 143 JVM tests passed locally.
 
 CI run on the pull request: run #24 of `Continuous_Integration` on commit `416902f` passed in about 1.5 minutes. Every step succeeded, and the run was faster than earlier ones because the Robolectric runtime was restored from the CI cache.
+
+
+## Claude Code — Requirements Alignment 1: Results Wording (US05, US06)
+
+### Prompt #15
+
+> Start with 1 and then after it has been committed, work on 2. However, for 2. please create separate branches as needed […] and use the type of feature/function/architecture/requirement as applicable.
+
+"2." referred to bringing the app in line with `REQUIREMENTS.md` after a review of the app against the requirements and architecture during M8. That review found that US01 (settings screen), US03 (Random Range delay, also missing from the domain model) and US07 (user-initiated save, reviewing a saved session) were not implemented. It also found that US05/US06's "unavailable" results were shown only as dashes. Claude Code proposed one branch per feature, in this order: `results-unavailable-labels`, `random-start-delay`, `timer-settings-screen`, `session-history-review`, and optionally `requirements-reset-wording`. This entry covers the first branch.
+
+### AI Output
+
+US05 and US06 say that when a value cannot be calculated, the results must *indicate* that it is unavailable. The screen showed dashes (`—`) instead. Claude Code:
+
+- added `ui/ResultsText.kt`, a small pure-Kotlin object holding the results wording, so the rules can be unit tested without the UI;
+- made `TimerScreen` show **"Total time unavailable"** when there are no shots, and **"Split statistics unavailable (needs at least 2 shots)"** when there are fewer than two shots, instead of dashes;
+- made a history row for a session with no shots say **"total time unavailable"** (possible once 0-shot sessions can be saved);
+- kept the first shot's own `split —`, since US05 only requires that the first shot has no split.
+
+Tests: `ResultsTextTest` (4 new: 0, 1 and 3 shots, and the history total). The acceptance test now checks the new wording at the two points where no shots have been recorded. 147 of 147 tests passed.
+
+### Code Changes
+
+- New: `ui/ResultsText.kt`, `ui/ResultsTextTest.kt`.
+- Edited: `ui/TimerScreen.kt`, `acceptance/ThinSliceAcceptanceTest.kt`.
+- Branch `results-unavailable-labels`. Commit: `d324dfa`, in pull request #11. This log entry was added in a second commit on the same pull request.
+
+### Diff
+
+None.
+
+### Result
+
+147 of 147 JVM tests passed locally.
+
+CI run on the pull request: run #28 of `Continuous_Integration` on commit `d324dfa` passed in about 1.5 minutes. Every step succeeded, including `Run unit tests` (with the updated Robolectric acceptance test).
