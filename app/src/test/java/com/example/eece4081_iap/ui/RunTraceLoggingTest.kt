@@ -59,7 +59,7 @@ class RunTraceLoggingTest {
         clock = clock,
         scheduler = scheduler,
         newSessionId = { "session-1" },
-        initialSettings = TimerSettings.DEFAULT, // threshold 0.5, cooldown 200 ms
+        initialSettings = TimerSettings.DEFAULT, // threshold 0.5, cooldown 80 ms
         newRunId = { "run-${++runCounter}" },
         log = log,
     )
@@ -194,8 +194,8 @@ class RunTraceLoggingTest {
     @Test
     fun aLongNoisyRun_staysAtAboutOneAudioRecordPerSecond() {
         startAndReachRecording()
-        // 60 s of a loud sound every 50 ms: one counted shot per 200 ms
-        // cooldown, the other three in each 200 ms ignored as echoes.
+        // 60 s of a loud sound every 50 ms: with the 80 ms cooldown, every
+        // other sound (100 ms apart) counts and the one between is an echo.
         repeat(1200) {
             clock.advance(50.milliseconds)
             audio.emit(loud)
@@ -208,7 +208,7 @@ class RunTraceLoggingTest {
         val audioRecords = log.records.filter { it.event == "audio.level" }
         assertTrue("about one per second, was ${audioRecords.size}", audioRecords.size in 55..60)
         assertTrue(log.records.none { it.event == "shot.ignored" })
-        assertEquals(900, log.only("run.stopped").data["ignoredCooldown"])
+        assertEquals(600, log.only("run.stopped").data["ignoredCooldown"])
     }
 
     @Test

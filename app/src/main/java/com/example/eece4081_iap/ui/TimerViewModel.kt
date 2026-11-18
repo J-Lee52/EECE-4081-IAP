@@ -5,7 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.example.eece4081_iap.data.SessionRepository
+import com.example.eece4081_iap.data.SettingsRepository
+import com.example.eece4081_iap.domain.FixedDelay
+import com.example.eece4081_iap.domain.RandomDelay
 import com.example.eece4081_iap.domain.ShootingSession
+import com.example.eece4081_iap.domain.TimerSettings
 import com.example.eece4081_iap.engine.TimerEngine
 import com.example.eece4081_iap.engine.TimerSnapshot
 import com.example.eece4081_iap.engine.TimerState
@@ -18,7 +22,8 @@ import java.util.concurrent.Executor
 
 /**
  * Connects the screens to the timer workflow (ADR-001). The screens read
- * [snapshot], [history] and [errorMessage] and call [start] and [stop].
+ * [snapshot], [history], [settings] and [errorMessage] and call [start],
+ * [stop] and [saveSettings].
  *
  * The engine reports changes on whatever thread caused them (often the audio
  * thread), so every change is handed to [postToMain] before it touches the
@@ -34,9 +39,14 @@ class TimerViewModel(
     private val postToMain: (() -> Unit) -> Unit,
     private val background: Executor,
     log: EventLog = EventLog.NONE,
+    private val settingsRepository: SettingsRepository = SettingsRepository.NONE,
 ) : ViewModel() {
 
     private val log: EventLog = log.bestEffort()
+
+    /** The settings the next session will use (US01). */
+    var settings by mutableStateOf(engine.currentSettings())
+        private set
 
     /** The timer as the screen should draw it right now. */
     var snapshot by mutableStateOf(engine.snapshot())
@@ -55,7 +65,81 @@ class TimerViewModel(
 
     init {
         engine.listener = { latest -> postToMain { onSnapshot(latest) } }
+        loadSettings()
         refreshHistory()
+    }
+
+    /**
+     * Uses [newSettings] for the next session and remembers them (US01).
+     * Refused while a run is in progress (Preparing, WaitingForStart or
+     * Recording): returns false and changes nothing. A failure to remember
+     * them is shown, but they still apply until the app is closed.
+     */
+    fun saveSettings(newSettings: TimerSettings): Boolean {
+        if (!engine.updateSettings(newSettings)) {
+            record(LogLevel.WARN, "settings.rejected", null, null, "state" to engine.snapshot().state)
+            errorMessage = "Settings can't be changed while a run is in progress."
+            return false
+        }
+        settings = newSettings
+        record(LogLevel.INFO, "settings.changed", null, null, *settingsFields(newSettings))
+        background.execute {
+            try {
+                settingsRepository.save(newSettings)
+            } catch (e: Exception) {
+                record(
+                    LogLevel.ERROR, "settings.save_failed", null, null,
+                    "error" to e.javaClass.simpleName,
+                    diagnostics = mapOf("message" to e.message),
+                )
+                postToMain { errorMessage = "Could not save the settings. They will apply until the app is closed." }
+            }
+        }
+        return true
+    }
+
+    /**
+     * Reads the remembered settings on the background thread and applies them
+     * on the main thread. If they cannot be read, the defaults are used and the
+     * person is told. (If a run was started in the few milliseconds before they
+     * load, that run keeps the defaults.)
+     */
+    private fun loadSettings() {
+        background.execute {
+            val loaded = try {
+                settingsRepository.load()
+            } catch (e: Exception) {
+                record(
+                    LogLevel.WARN, "settings.load_failed", null, null,
+                    "error" to e.javaClass.simpleName,
+                    diagnostics = mapOf("message" to e.message),
+                )
+                postToMain { errorMessage = "The saved settings could not be read, so the defaults are used." }
+                return@execute
+            }
+            if (loaded == null) return@execute
+            postToMain {
+                if (engine.updateSettings(loaded)) {
+                    settings = loaded
+                    record(LogLevel.INFO, "settings.loaded", null, null, *settingsFields(loaded))
+                }
+            }
+        }
+    }
+
+    private fun settingsFields(settings: TimerSettings): Array<Pair<String, Any?>> {
+        val delay = when (val d = settings.startDelay) {
+            is FixedDelay -> arrayOf("startDelayMode" to "fixed", "startDelayMs" to d.duration.inWholeMilliseconds)
+            is RandomDelay -> arrayOf(
+                "startDelayMode" to "random",
+                "minDelayMs" to d.minDelay.inWholeMilliseconds,
+                "maxDelayMs" to d.maxDelay.inWholeMilliseconds,
+            )
+        }
+        return arrayOf<Pair<String, Any?>>(
+            "threshold" to settings.detectionThreshold,
+            "cooldownMs" to settings.detectionCooldown.inWholeMilliseconds,
+        ) + delay
     }
 
     fun start() {

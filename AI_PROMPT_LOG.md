@@ -780,3 +780,64 @@ None.
 158 of 158 JVM tests passed locally.
 
 CI run on the pull request: run #31 of `Continuous_Integration` on commit `a6b576d` passed in about 1.5 minutes. Every step succeeded.
+
+
+## Claude Code — Requirements Alignment 3: Settings Screen (US01)
+
+### Prompt #17
+
+This entry continues the request in Prompt #15: the third feature branch, `timer-settings-screen`, started after pull request #12 was merged. Before writing code, Claude Code described what US01 requires and asked three design questions.
+
+### AI Output
+
+US01 says the user can configure the detection threshold, the start-delay mode (Fixed, or Random Range with a minimum and maximum, minimum not above maximum) and the shot cooldown. Settings can be changed only in Idle or Completed, a session uses the settings chosen before it started, and changing them afterwards does not alter a completed session's results. The engine already refused setting changes while a run was active, and branch 2 had added `RandomDelay`, but the app had no way to change any setting. Claude Code:
+
+- **Settings screen** (`ui/SettingsScreen.kt`): sliders for the detection threshold (0.05–1.00), shot cooldown (0–1,000 ms) and the delay (0–10 s in 0.1 s steps), a Fixed / Random range choice, a sentence showing the random range, short explanations under the threshold and cooldown, and Save and Cancel. Android's Back button acts as Cancel.
+- **Draft rules** (`ui/SettingsDraft.kt`, pure Kotlin): slider values are whole steps, so what is shown is what is saved. Moving the minimum past the maximum moves the maximum with it, and the reverse, so Save always has valid settings. Switching modes keeps the other mode's values.
+- **Screen switching** (`ui/ShotTimerApp.kt`): a small root composable switches between the timer screen and the Settings screen and shares one ViewModel, without a navigation library. `MainActivity` now shows `ShotTimerApp`.
+- **Timer screen:** a **Settings** button, enabled only when no run is in progress, and a one-line summary of the settings in use (for example "Delay 3.0 s · Threshold 0.50 · Cooldown 200 ms").
+- **ViewModel:** `settings` and `saveSettings()`, which applies new settings to the engine only when no run is in progress, and otherwise refuses and shows a message. The remembered settings are loaded at startup. New log records: `settings.changed`, `settings.loaded`, `settings.rejected`, `settings.load_failed` and `settings.save_failed`.
+- **Remembering settings** (`data/SettingsRepository.kt`): `FileSettingsRepository` keeps them in `settings.json` in the app's storage. Unreadable settings fall back to the defaults, with a message.
+- **Shared code in the data layer:** the M8 safe file replacement moved from `FileSessionRepository` into `data/SafeFileWrite.kt`, so sessions and settings share it. The settings JSON moved from `SessionJson` into `data/TimerSettingsJson.kt`, so saved sessions and remembered settings use one format; the saved-session format did not change.
+- **Runbook:** rows F and G no longer say the threshold cannot be changed. They now tell the operator how to adjust the detection threshold or shot cooldown in Settings, and the background section names the Settings screen and the summary line.
+
+Tests (22 new):
+
+- `SettingsDraftTest` (9): defaults, Random range values, the minimum never passing the maximum whatever order the sliders move, clamping, keeping values across mode switches, snapping saved values, and the summary line.
+- `FileSettingsRepositoryTest` (5): nothing saved, remembered after reopening, replaced, unreadable file, and a failed save keeping the previous settings.
+- `SettingsViewModelTest` (6): saved settings are used and remembered, refused during a run, loaded at startup, unreadable settings fall back to the defaults, a save failure is shown but the settings still apply, and a completed session keeps the settings it ran with.
+- `SettingsAcceptanceTest` (2): drives the real screens. It opens Settings, chooses Random range, moves the threshold slider, saves, sees the summary, starts a session whose delay is within the range, finds Settings locked during the run, and finds the settings still chosen after the app is reopened. A second test checks that Cancel changes nothing.
+
+180 of 180 tests passed. The existing session save and replacement tests passed through the shared code unchanged.
+
+### Code Changes
+
+- New: `data/SafeFileWrite.kt`, `data/SettingsRepository.kt`, `data/TimerSettingsJson.kt`, `ui/SettingsDraft.kt`, `ui/SettingsScreen.kt`, `ui/ShotTimerApp.kt`, and tests `SettingsDraftTest.kt`, `FileSettingsRepositoryTest.kt`, `SettingsViewModelTest.kt`, `acceptance/SettingsAcceptanceTest.kt`.
+- Edited: `MainActivity.kt`, `data/FileSessionRepository.kt`, `data/SessionJson.kt`, `domain/TimerSettings.kt` (default cooldown), `ui/TimerScreen.kt`, `ui/TimerViewModel.kt`, `ui/TimerViewModelFactory.kt`, `docs/runbook/RB-001-shots-not-counted.md`, and `RunTraceLoggingTest.kt`.
+- Branch `timer-settings-screen`. Commit: `2df902c` (19 files), in pull request #13. This log entry was added in a second commit on the same pull request.
+
+### Diff
+
+**Default shot cooldown lowered from 200 ms to 80 ms.** After Claude Code installed the build on my phone, I asked whether the detection threshold really targets gunshots. Claude Code explained that it does not: any sound loud enough counts, and my claps already reached 0.92–0.96. I gave it seven open-source shot-timer repositories to compare: `GPTmadeit/split-shot-timer`, `carlemil/FieldShootingTimer`, `PorkStew/topshottimer`, `tiltti/mcshoot`, `jcarletto27/HeyManNiceShotTimer`, `Mr-Jami/simple-shot-timer` and `Bjorn-b/Shottimer_Arduino`. Claude Code read their detection code and converted each default threshold into this app's units:
+
+- Two do not detect shots (FieldShootingTimer, mcshoot).
+- The others' default thresholds ranged from 0.08 to 0.85, depending on the device and audio processing, so no single value transfers.
+- Their echo rejection was 50–80 ms, against this app's 200 ms, which could drop fast double-taps.
+
+The comparison also found that both Android-based apps use the unprocessed microphone source, and that one discards sounds that do not overload the microphone. These were noted for later and not changed.
+
+I chose to lower only the default cooldown for now. `TimerSettings.DEFAULT` now uses 80 ms. Its comment gives the reason: the M8 phone capture showed clap echoes 2–44 ms after the clap, so 80 ms still rejects them. The tests that relied on the old default were updated: the default and summary text in `SettingsDraftTest`, the summary lines in `SettingsAcceptanceTest`, and the long noisy run in `RunTraceLoggingTest`, which now counts every other sound and 600 echoes. Runbook row G now says 80 ms is shorter than human splits, tells the operator to check the cooldown actually in use, and explains how to spot the opposite problem (one shot counted twice). 180 of 180 tests still passed.
+
+**Commit check warning.** Android Studio's code analysis reported one warning in Claude Code's new `SettingsAcceptanceTest`: a redundant `Executor { … }` wrapper. Claude Code removed it and the import it left unused. 180 of 180 tests still passed.
+
+Decisions I made during the prompt:
+
+- **Layout:** a separate Settings screen with Save and Cancel, rather than a section on the timer screen or a dialog.
+- **Remembering settings:** yes, the chosen settings are kept after the app is closed.
+- **Controls:** sliders with the value shown, rather than typed numbers.
+
+### Result
+
+180 of 180 JVM tests passed locally.
+
+CI run on the pull request: run #34 of `Continuous_Integration` on commit `2df902c` passed in about 2 minutes. Every step succeeded, including `Run unit tests` with both Robolectric acceptance tests (`ThinSliceAcceptanceTest` and the new `SettingsAcceptanceTest`).

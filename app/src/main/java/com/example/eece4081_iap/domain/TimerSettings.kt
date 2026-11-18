@@ -72,10 +72,18 @@ data class TimerSettings(
     }
 
     companion object {
-        /** Placeholder defaults; tune against real microphone input. */
+        /**
+         * Defaults until the person changes them on the Settings screen.
+         *
+         * The 80 ms cooldown matches the echo filter of other phone shot
+         * timers and allows fast double-taps (splits under 0.2 s). Clap echoes
+         * captured on a test phone arrived 2–44 ms after the clap, so 80 ms
+         * still rejects them. The threshold is still a placeholder; tune it
+         * against real gunshots.
+         */
         val DEFAULT = TimerSettings(
             detectionThreshold = 0.5,
-            detectionCooldown = 200.milliseconds,
+            detectionCooldown = 80.milliseconds,
             startDelay = FixedDelay(3.seconds),
         )
     }

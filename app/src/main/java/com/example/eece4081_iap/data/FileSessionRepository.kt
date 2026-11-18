@@ -39,28 +39,7 @@ class FileSessionRepository(
         }
 
         val target = File(directory, "${session.id}$EXTENSION")
-        val temp = File(directory, "${session.id}$EXTENSION$TEMP")
-        temp.writeText(SessionJson.encode(session), Charsets.UTF_8)
-        if (rename(temp, target)) return
-
-        // Some file systems will not rename over an existing file. Move the
-        // previous copy aside (not delete it) so it can be put back if the
-        // replacement fails.
-        val backup = File(directory, "${session.id}$EXTENSION$BACKUP")
-        val hadPrevious = target.exists()
-        if (hadPrevious) {
-            backup.delete()
-            if (!rename(target, backup)) {
-                temp.delete()
-                throw IOException("Cannot save session ${session.id}")
-            }
-        }
-        if (!rename(temp, target)) {
-            if (hadPrevious) rename(backup, target)
-            temp.delete()
-            throw IOException("Cannot save session ${session.id}")
-        }
-        if (hadPrevious) backup.delete()
+        replaceFileSafely(target, SessionJson.encode(session), rename)
     }
 
     @Synchronized
@@ -93,18 +72,15 @@ class FileSessionRepository(
      * is not lost.
      */
     private fun restoreInterruptedSaves() {
-        val backups = directory.listFiles { file -> file.isFile && file.name.endsWith("$EXTENSION$BACKUP") }
+        val backups = directory.listFiles { file -> file.isFile && file.name.endsWith("$EXTENSION$BACKUP_SUFFIX") }
             ?: return
         for (backup in backups) {
-            val target = File(directory, backup.name.removeSuffix(BACKUP))
-            if (!target.exists()) rename(backup, target)
+            restoreInterruptedReplace(File(directory, backup.name.removeSuffix(BACKUP_SUFFIX)), rename)
         }
     }
 
     private companion object {
         const val EXTENSION = ".json"
-        const val TEMP = ".tmp"
-        const val BACKUP = ".bak"
         val SAFE_ID = Regex("[A-Za-z0-9_-]+")
     }
 }

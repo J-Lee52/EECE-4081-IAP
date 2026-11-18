@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.example.eece4081_iap.ui.TimerScreen
+import com.example.eece4081_iap.ui.ShotTimerApp
 import com.example.eece4081_iap.ui.theme.EECE4081IAPTheme
 
 class MainActivity : ComponentActivity() {
@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             EECE4081IAPTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    TimerScreen(modifier = Modifier.padding(innerPadding))
+                    ShotTimerApp(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
