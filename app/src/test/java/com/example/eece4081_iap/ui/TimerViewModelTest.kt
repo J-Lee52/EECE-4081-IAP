@@ -28,14 +28,22 @@ class TimerViewModelTest {
     private class InMemoryRepository(initial: List<ShootingSession> = emptyList()) : SessionRepository {
         val saved = initial.toMutableList()
         var failOnSave = false
+        var failOnDelete = false
+        var saveCalls = 0
 
         override fun save(session: ShootingSession) {
+            saveCalls++
             if (failOnSave) throw IOException("disk full")
             saved.removeAll { it.id == session.id }
             saved.add(session)
         }
 
         override fun loadAll(): List<ShootingSession> = saved.sortedByDescending { it.startTime }
+
+        override fun delete(id: String) {
+            if (failOnDelete) throw IOException("read-only")
+            saved.removeAll { it.id == id }
+        }
     }
 
     private val audio = FakeAudioInput()
@@ -114,50 +122,155 @@ class TimerViewModelTest {
     }
 
     @Test
-    fun completingASessionWithShots_savesItAndShowsItInHistory() {
+    fun aCompletedSession_isNotSavedUntilThePersonSavesIt() {
         val repository = InMemoryRepository()
         val viewModel = viewModel(repository)
 
         recordOneShotAndStop(viewModel)
 
+        assertTrue("not saved automatically", repository.saved.isEmpty())
+        assertFalse(viewModel.currentSessionSaved)
+        assertTrue(viewModel.needsSaveDecision)
+
+        viewModel.saveCurrentSession()
+
         val saved = repository.saved.single()
         assertEquals(1, saved.shots.size)
         assertEquals(listOf(saved), viewModel.history)
+        assertTrue(viewModel.currentSessionSaved)
+        assertFalse(viewModel.needsSaveDecision)
     }
 
     @Test
-    fun completingASessionWithNoShots_doesNotSaveIt() {
+    fun aCompletedSessionWithNoShots_canBeSaved() {
         val repository = InMemoryRepository()
         val viewModel = viewModel(repository)
-
         reachRecording(viewModel)
         viewModel.stop()
 
-        assertEquals(TimerState.Completed, viewModel.snapshot.state)
-        assertTrue(repository.saved.isEmpty())
-        assertTrue(viewModel.history.isEmpty())
+        viewModel.saveCurrentSession()
+
+        assertEquals(0, repository.saved.single().shots.size)
+        assertEquals(1, viewModel.history.size)
     }
 
     @Test
     fun aSessionIsSavedOnlyOnce() {
         val repository = InMemoryRepository()
         val viewModel = viewModel(repository)
-
         recordOneShotAndStop(viewModel)
-        viewModel.stop() // rejected by the engine, changes nothing
 
+        viewModel.saveCurrentSession()
+        viewModel.saveCurrentSession() // already saved: ignored
+
+        assertEquals(1, repository.saveCalls)
+    }
+
+    @Test
+    fun thereIsNothingToSaveBeforeASessionIsCompleted() {
+        val repository = InMemoryRepository()
+        val viewModel = viewModel(repository)
+        reachRecording(viewModel)
+
+        viewModel.saveCurrentSession()
+
+        assertFalse(viewModel.needsSaveDecision)
+        assertEquals(0, repository.saveCalls)
+    }
+
+    @Test
+    fun saveAndStart_startsTheNextSessionOnlyAfterTheSaveSucceeds() {
+        val repository = InMemoryRepository()
+        val viewModel = viewModel(repository)
+        recordOneShotAndStop(viewModel)
+        var started = false
+
+        viewModel.saveCurrentSession(afterSaved = { started = true })
+
+        assertTrue(started)
         assertEquals(1, repository.saved.size)
+    }
+
+    @Test
+    fun saveAndStart_whenTheSaveFails_doesNotStartAndKeepsTheSessionOnScreen() {
+        val repository = InMemoryRepository().apply { failOnSave = true }
+        val viewModel = viewModel(repository)
+        recordOneShotAndStop(viewModel)
+        var started = false
+
+        viewModel.saveCurrentSession(afterSaved = { started = true })
+
+        assertFalse(started)
+        assertEquals(TimerState.Completed, viewModel.snapshot.state)
+        assertTrue("can still be saved or discarded", viewModel.needsSaveDecision)
+    }
+
+    @Test
+    fun discardingThenStarting_beginsANewSessionWithoutSavingTheOldOne() {
+        val repository = InMemoryRepository()
+        val viewModel = viewModel(repository)
+        recordOneShotAndStop(viewModel)
+
+        viewModel.discardCurrentSession()
+        viewModel.start()
+
+        assertTrue(repository.saved.isEmpty())
+        assertEquals(TimerState.WaitingForStart, viewModel.snapshot.state)
+        assertFalse(viewModel.needsSaveDecision)
+    }
+
+    @Test
+    fun deletingASavedSession_removesItFromStorageAndHistory() {
+        val older = ShootingSession("old", 500L, TimerSettings.DEFAULT)
+        val repository = InMemoryRepository(listOf(older))
+        val viewModel = viewModel(repository)
+        var afterDeleted = false
+
+        viewModel.deleteSession("old", afterDeleted = { afterDeleted = true })
+
+        assertTrue(repository.saved.isEmpty())
+        assertTrue(viewModel.history.isEmpty())
+        assertTrue(afterDeleted)
+    }
+
+    @Test
+    fun deletingTheJustSavedSession_meansItIsUnsavedAgain() {
+        val repository = InMemoryRepository()
+        val viewModel = viewModel(repository)
+        recordOneShotAndStop(viewModel)
+        viewModel.saveCurrentSession()
+
+        viewModel.deleteSession(viewModel.snapshot.session!!.id)
+
+        assertFalse(viewModel.currentSessionSaved)
+        assertTrue(viewModel.needsSaveDecision)
+    }
+
+    @Test
+    fun aFailedDelete_showsAnErrorAndKeepsTheSession() {
+        val older = ShootingSession("old", 500L, TimerSettings.DEFAULT)
+        val repository = InMemoryRepository(listOf(older)).apply { failOnDelete = true }
+        val viewModel = viewModel(repository)
+        var afterDeleted = false
+
+        viewModel.deleteSession("old", afterDeleted = { afterDeleted = true })
+
+        assertEquals("Could not delete the session.", viewModel.errorMessage)
+        assertEquals(listOf(older), viewModel.history)
+        assertFalse(afterDeleted)
     }
 
     @Test
     fun aFailedSave_showsAnError() {
         val repository = InMemoryRepository().apply { failOnSave = true }
         val viewModel = viewModel(repository)
-
         recordOneShotAndStop(viewModel)
+
+        viewModel.saveCurrentSession()
 
         assertNotNull(viewModel.errorMessage)
         assertTrue(viewModel.history.isEmpty())
+        assertFalse("it can be tried again", viewModel.currentSessionSaved)
     }
 
     @Test

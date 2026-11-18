@@ -40,6 +40,7 @@ class SettingsViewModelTest {
     private object NoSessions : SessionRepository {
         override fun save(session: ShootingSession) = Unit
         override fun loadAll(): List<ShootingSession> = emptyList()
+        override fun delete(id: String) = Unit
     }
 
     private val scheduler = FakeScheduler()

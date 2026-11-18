@@ -43,6 +43,19 @@ class FileSessionRepository(
     }
 
     @Synchronized
+    override fun delete(id: String) {
+        require(SAFE_ID.matches(id)) { "Unsupported session id: $id" }
+        val target = File(directory, "$id$EXTENSION")
+        // A copy left aside by an interrupted save would bring the session
+        // back on the next load, so remove it too.
+        File(target.path + BACKUP_SUFFIX).delete()
+        File(target.path + TEMP_SUFFIX).delete()
+        if (target.exists() && !target.delete()) {
+            throw IOException("Cannot delete session $id")
+        }
+    }
+
+    @Synchronized
     override fun loadAll(): List<ShootingSession> {
         restoreInterruptedSaves()
         val files = directory.listFiles { file -> file.isFile && file.name.endsWith(EXTENSION) }

@@ -4,15 +4,19 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,8 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.eece4081_iap.engine.TimerState
-import java.text.DateFormat
-import java.util.Date
 
 /**
  * The one screen of the walking skeleton: Start/Stop, the live shots and
@@ -41,9 +43,11 @@ fun TimerScreen(
     modifier: Modifier = Modifier,
     viewModel: TimerViewModel = viewModel(factory = timerViewModelFactory()),
     onOpenSettings: (() -> Unit)? = null,
+    onOpenSession: ((sessionId: String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var permissionDenied by remember { mutableStateOf(false) }
+    var askAboutUnsaved by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -63,6 +67,35 @@ fun TimerScreen(
         } else {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    // US07: starting over would discard an unsaved completed session, so ask first.
+    val onStartTapped = {
+        if (viewModel.needsSaveDecision) askAboutUnsaved = true else onStartClicked()
+    }
+
+    if (askAboutUnsaved) {
+        AlertDialog(
+            onDismissRequest = { askAboutUnsaved = false },
+            title = { Text("Session not saved") },
+            text = { Text("This session hasn't been saved. Start a new one anyway?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askAboutUnsaved = false
+                    viewModel.saveCurrentSession(afterSaved = { onStartClicked() })
+                }) { Text("Save and start") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { askAboutUnsaved = false }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        askAboutUnsaved = false
+                        viewModel.discardCurrentSession()
+                        onStartClicked()
+                    }) { Text("Discard") }
+                }
+            },
+        )
     }
 
     val snapshot = viewModel.snapshot
@@ -96,7 +129,17 @@ fun TimerScreen(
         item {
             when {
                 state == TimerState.Recording -> Button(onClick = { viewModel.stop() }) { Text("Stop") }
-                state.isAtRest -> Button(onClick = { onStartClicked() }) { Text("Start") }
+                state.isAtRest -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = onStartTapped) { Text("Start") }
+                    // A completed session is kept only if the person saves it (US07).
+                    if (state == TimerState.Completed) {
+                        if (viewModel.currentSessionSaved) {
+                            OutlinedButton(onClick = {}, enabled = false) { Text("Saved ✓") }
+                        } else {
+                            OutlinedButton(onClick = { viewModel.saveCurrentSession() }) { Text("Save session") }
+                        }
+                    }
+                }
                 else -> Button(onClick = {}, enabled = false) { Text("Please wait") }
             }
         }
@@ -128,10 +171,7 @@ fun TimerScreen(
             Text(ResultsText.splitStatistics(stats))
         }
         items(shots, key = { "shot-${it.shotNumber}" }) { shot ->
-            Text(
-                "#${shot.shotNumber}   ${shot.timestamp.toSecondsText()}" +
-                    "   split ${shot.splitTime.orDash()}",
-            )
+            Text(ResultsText.shotRow(shot))
         }
 
         item { HorizontalDivider() }
@@ -142,9 +182,15 @@ fun TimerScreen(
             item { Text("No saved sessions yet.") }
         }
         items(history, key = { "session-${it.id}" }) { session ->
+            // Tap a saved session to review it (US07), while no run is in progress.
             Text(
-                "${formatStart(session.startTime)} — ${session.shots.size} shots, " +
-                    ResultsText.historyTotal(session.shots.lastOrNull()?.timestamp),
+                ResultsText.historyRow(session),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = onOpenSession != null && state.isAtRest) {
+                        onOpenSession?.invoke(session.id)
+                    }
+                    .padding(vertical = 4.dp),
             )
         }
     }
@@ -158,7 +204,3 @@ private fun statusText(state: TimerState): String = when (state) {
     TimerState.Completed -> "Session complete"
 }
 
-private fun kotlin.time.Duration?.orDash(): String = this?.toSecondsText() ?: "—"
-
-private fun formatStart(startTime: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(startTime))

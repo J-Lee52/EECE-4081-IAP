@@ -45,8 +45,8 @@ import kotlin.time.Duration.Companion.seconds
  * Acceptance test for the walking-skeleton thin slice (M5):
  *
  *   Start -> fixed delay -> start beep -> shots detected from microphone
- *   audio -> splits and statistics on screen -> Stop -> session saved ->
- *   app reopened -> session still listed under "Past sessions".
+ *   audio -> splits and statistics on screen -> Stop -> Save session (US07)
+ *   -> app reopened -> session still listed under "Past sessions".
  *
  * It drives the real TimerScreen by its button labels and checks what the
  * person would read. Everything between the screen and the disk is the
@@ -215,8 +215,19 @@ class ThinSliceAcceptanceTest {
         tap("Stop")
         assertShown("Session complete")
 
+        // Then nothing is saved until the shooter chooses to (US07)
+        assertEquals(
+            "no session file before Save",
+            0,
+            sessionsFolder.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0,
+        )
+
+        // When the shooter taps Save session
+        tap("Save session")
+
         // Then the session is saved to storage and listed under Past sessions
         waitUntilShown("3 shots, total 2.35 s")
+        assertShown("Saved ✓")
         val savedFiles = sessionsFolder.listFiles { f -> f.name.endsWith(".json") }?.map { it.name }
         assertEquals("one saved session file in $sessionsFolder", 1, savedFiles?.size)
 
