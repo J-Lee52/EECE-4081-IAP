@@ -892,11 +892,11 @@ Tests:
 
 - New: `ui/SessionReviewScreen.kt`, `acceptance/SessionHistoryAcceptanceTest.kt`.
 - Edited: `REQUIREMENTS.md`, `data/SessionRepository.kt`, `data/FileSessionRepository.kt`, `ui/ResultsText.kt`, `ui/ShotTimerApp.kt`, `ui/TimerScreen.kt`, `ui/TimerViewModel.kt`, `docs/runbook/RB-001-shots-not-counted.md`, and tests `ThinSliceAcceptanceTest.kt`, `FileSessionRepositoryTest.kt`, `ResultsTextTest.kt`, `RunTraceLoggingTest.kt`, `SettingsViewModelTest.kt`, `TimerViewModelTest.kt`.
-- Branch `session-history-review`. Commit: `<fill in>`.
+- Branch `session-history-review`. Commit: `8504ae7` (17 files, including this log entry with its placeholders), in pull request #14. The placeholders were filled in a second commit on the same pull request.
 
 ### Diff
 
-`<fill in: any changes I asked for or made after review, or "none">`
+None.
 
 Decisions I made during the prompt:
 
@@ -909,4 +909,4 @@ Decisions I made during the prompt:
 
 198 of 198 JVM tests passed locally.
 
-CI run on the pull request: `<fill in>`.
+CI run on the pull request: run #37 of `Continuous_Integration` on commit `8504ae7` passed in about 1.5 minutes. Every step succeeded, including `Run unit tests` with all three Robolectric acceptance tests (`ThinSliceAcceptanceTest`, `SettingsAcceptanceTest` and the new `SessionHistoryAcceptanceTest`).
