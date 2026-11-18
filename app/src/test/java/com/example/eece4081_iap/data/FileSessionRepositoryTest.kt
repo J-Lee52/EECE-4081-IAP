@@ -142,6 +142,40 @@ class FileSessionRepositoryTest {
     }
 
     @Test
+    fun delete_removesOnlyThatSession_alsoForANewRepositoryOnTheSameFolder() {
+        val keep = session("keep", 2_000L, 900)
+        repository().save(keep)
+        repository().save(session("gone", 1_000L, 1200))
+
+        repository().delete("gone")
+
+        assertEquals(listOf(keep), repository().loadAll())
+        assertEquals(listOf("keep.json"), directory().list()!!.toList())
+    }
+
+    @Test
+    fun delete_ofASessionThatIsNotSaved_doesNothing() {
+        repository().delete("never-saved")
+
+        assertTrue(repository().loadAll().isEmpty())
+    }
+
+    @Test
+    fun delete_alsoRemovesACopyLeftAsideByAnInterruptedSave_soTheSessionDoesNotComeBack() {
+        repository().save(session("a", 1_000L, 1200))
+        File(directory(), "a.json").copyTo(File(directory(), "a.json.bak"))
+
+        repository().delete("a")
+
+        assertTrue(repository().loadAll().isEmpty())
+    }
+
+    @Test
+    fun delete_withAnIdThatIsNotAPlainFileName_isRejected() {
+        assertThrows(IllegalArgumentException::class.java) { repository().delete("../evil") }
+    }
+
+    @Test
     fun save_leavesNoTemporaryFilesBehind() {
         val repository = repository()
         repository.save(session("a", 1_000L, 1200))

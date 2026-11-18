@@ -841,3 +841,72 @@ Decisions I made during the prompt:
 180 of 180 JVM tests passed locally.
 
 CI run on the pull request: run #34 of `Continuous_Integration` on commit `2df902c` passed in about 2 minutes. Every step succeeded, including `Run unit tests` with both Robolectric acceptance tests (`ThinSliceAcceptanceTest` and the new `SettingsAcceptanceTest`).
+
+
+## Claude Code — Requirements Alignment 4: Save, Review and Delete Sessions (US07)
+
+### Prompt #18
+
+This entry continues the request in Prompt #15: the fourth feature branch, `session-history-review`, started after pull request #13 was merged. Before this branch I had decided three things:
+
+- saving should be user-initiated, as US07 says;
+- sessions with no shots should be saveable;
+- deleting a saved session should be added, to this branch, with `REQUIREMENTS.md` updated first.
+
+Before writing code, Claude Code proposed the requirement wording and the screen behaviour, and asked four questions.
+
+### AI Output
+
+**Requirements first.** `REQUIREMENTS.md` US07 gained three acceptance criteria, using the wording Claude Code proposed and adjusted to my answers. No existing criterion was changed.
+
+- A completed session can be saved even if no shots were recorded.
+- The user can delete a saved session. The app asks for confirmation first, and a deleted session cannot be recovered.
+- If the user starts a new session while the completed session has not been saved, the app asks whether to save it, discard it, or cancel starting the new session.
+
+Claude Code then:
+
+- **Storage:** added `SessionRepository.delete(id)`. `FileSessionRepository` deletes the session's file, and also any copy left aside by an interrupted save, so a deleted session cannot come back on the next load.
+- **ViewModel:** removed automatic saving on Stop. It added:
+  - `saveCurrentSession()`, which works for any completed session including one with no shots, saves it only once, and can start the next session after a successful save;
+  - `discardCurrentSession()`, `deleteSession()`, `currentSessionSaved`, and `needsSaveDecision`, which is true when a completed session is unsaved.
+  - New log records: `session.discarded`, `session.deleted` and `session.delete_failed`. `session.saved` is now written when the user saves. `session.not_saved` was removed, because nothing is saved automatically any more.
+- **Timer screen:** after Stop, a **Save session** button that becomes **Saved ✓**. **Start** on an unsaved completed session shows "Session not saved", with Save and start, Discard, and Cancel. History rows can be tapped to open a session while no run is in progress, and say "1 shot" instead of "1 shots".
+- **Review screen** (`ui/SessionReviewScreen.kt`): a saved session, read-only. It shows when it was recorded, the settings it used, its total and split statistics (recalculated from the stored shots), and every shot with its time and split. **Back** returns to the timer (Android's Back button too). **Delete** asks "Delete this session?" with Cancel and Delete.
+- **Screen switching** (`ui/ShotTimerApp.kt`): now three screens (timer, Settings, review). If the session being reviewed has been deleted, the app returns to the timer.
+- **Shared wording** in `ui/ResultsText.kt`: `shotCount` ("1 shot" or "n shots"), `shotRow`, `historyRow` and `sessionStart`, used by both the timer and review screens.
+- **Runbook and app text:** row C and the microphone-failure message now say the shots before a failure are still on screen and can be kept with **Save session**, instead of saying they were saved.
+
+Tests:
+
+- **Updated:** 10 existing tests assumed sessions were saved automatically on Stop. They were updated to save explicitly, and the M5 acceptance test now checks that nothing is saved before **Save session** is tapped.
+- **New (18):**
+  - `TimerViewModelTest` (7): nothing is saved before a session is completed; Save and start starts only after a successful save; a failed save does not start; discard then start; delete; deleting the just-saved session makes it unsaved again; a failed delete.
+  - `FileSessionRepositoryTest` (4): delete, deleting an unsaved id, a copy left aside does not bring a deleted session back, and an unsafe id is rejected.
+  - `ResultsTextTest` (3): "1 shot", the shot row, and the history row.
+  - `RunTraceLoggingTest` (2): discard and delete are logged.
+  - `SessionHistoryAcceptanceTest` (2), driving the real screens. The first saves a session, opens it from the history, checks its shots, splits, statistics and settings, goes back, cancels a delete, then deletes it and confirms it is gone from the history and from storage. The second checks the "Session not saved" prompt (Cancel, Discard, and Save and start), including saving a session with no shots.
+
+198 of 198 tests passed.
+
+### Code Changes
+
+- New: `ui/SessionReviewScreen.kt`, `acceptance/SessionHistoryAcceptanceTest.kt`.
+- Edited: `REQUIREMENTS.md`, `data/SessionRepository.kt`, `data/FileSessionRepository.kt`, `ui/ResultsText.kt`, `ui/ShotTimerApp.kt`, `ui/TimerScreen.kt`, `ui/TimerViewModel.kt`, `docs/runbook/RB-001-shots-not-counted.md`, and tests `ThinSliceAcceptanceTest.kt`, `FileSessionRepositoryTest.kt`, `ResultsTextTest.kt`, `RunTraceLoggingTest.kt`, `SettingsViewModelTest.kt`, `TimerViewModelTest.kt`.
+- Branch `session-history-review`. Commit: `8504ae7` (17 files, including this log entry with its placeholders), in pull request #14. The placeholders were filled in a second commit on the same pull request.
+
+### Diff
+
+None.
+
+Decisions I made during the prompt:
+
+- **Confirm before deleting:** yes.
+- **Starting over an unsaved session:** ask first, with Save and start, Discard, and Cancel, rather than discarding silently.
+- **Where Delete is offered:** on the review screen only, not on each history row.
+- **Requirement wording:** Claude Code's draft, adjusted to the choices above.
+
+### Result
+
+198 of 198 JVM tests passed locally.
+
+CI run on the pull request: run #37 of `Continuous_Integration` on commit `8504ae7` passed in about 1.5 minutes. Every step succeeded, including `Run unit tests` with all three Robolectric acceptance tests (`ThinSliceAcceptanceTest`, `SettingsAcceptanceTest` and the new `SessionHistoryAcceptanceTest`).

@@ -4,6 +4,7 @@ import com.example.eece4081_iap.domain.SessionStatisticsCalculator
 import com.example.eece4081_iap.domain.ShootingSession
 import com.example.eece4081_iap.domain.TimerSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -40,6 +41,33 @@ class ResultsTextTest {
             "Fastest split: 0.40 s\nAverage split: 0.55 s\nSlowest split: 0.70 s",
             ResultsText.splitStatistics(stats),
         )
+    }
+
+    @Test
+    fun shotCount_isSingularForOneShot() {
+        assertEquals("1 shot", ResultsText.shotCount(1))
+        assertEquals("0 shots", ResultsText.shotCount(0))
+        assertEquals("5 shots", ResultsText.shotCount(5))
+    }
+
+    @Test
+    fun shotRow_showsNumberTimeAndSplit_withNoSplitForTheFirstShot() {
+        val shots = ShootingSession("s", 0L, TimerSettings.DEFAULT)
+            .recordShot(1250.milliseconds)
+            .recordShot(1650.milliseconds)
+            .shots
+
+        assertEquals("#1   1.25 s   split —", ResultsText.shotRow(shots[0]))
+        assertEquals("#2   1.65 s   split 0.40 s", ResultsText.shotRow(shots[1]))
+    }
+
+    @Test
+    fun historyRow_saysOneShotOrNoTotalForSmallSessions() {
+        val oneShot = ShootingSession("a", 0L, TimerSettings.DEFAULT).recordShot(2650.milliseconds)
+        val noShots = ShootingSession("b", 0L, TimerSettings.DEFAULT)
+
+        assertTrue(ResultsText.historyRow(oneShot).endsWith(" — 1 shot, total 2.65 s"))
+        assertTrue(ResultsText.historyRow(noShots).endsWith(" — 0 shots, total time unavailable"))
     }
 
     @Test

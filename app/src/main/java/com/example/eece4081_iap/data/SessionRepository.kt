@@ -14,4 +14,10 @@ interface SessionRepository {
 
     /** Every saved session, newest first. Unreadable entries are skipped. */
     fun loadAll(): List<ShootingSession>
+
+    /**
+     * Permanently deletes the saved session with [id] (US07). Deleting a
+     * session that is not saved does nothing. Throws if it could not be deleted.
+     */
+    fun delete(id: String)
 }

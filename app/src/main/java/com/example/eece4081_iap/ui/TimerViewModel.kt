@@ -22,8 +22,9 @@ import java.util.concurrent.Executor
 
 /**
  * Connects the screens to the timer workflow (ADR-001). The screens read
- * [snapshot], [history], [settings] and [errorMessage] and call [start],
- * [stop] and [saveSettings].
+ * [snapshot], [history], [settings], [currentSessionSaved] and [errorMessage],
+ * and call [start], [stop], [saveSettings], and for saved sessions (US07)
+ * [saveCurrentSession], [discardCurrentSession] and [deleteSession].
  *
  * The engine reports changes on whatever thread caused them (often the audio
  * thread), so every change is handed to [postToMain] before it touches the
@@ -59,6 +60,12 @@ class TimerViewModel(
     /** A message for the person, or null. Cleared by [start] and [dismissError]. */
     var errorMessage by mutableStateOf<String?>(null)
         private set
+
+    /** True once the completed session on screen has been saved (US07). */
+    var currentSessionSaved by mutableStateOf(false)
+        private set
+
+    private var saving = false
 
     private var lastState = snapshot.state
     private var lastProblem: RunProblem? = null
@@ -165,6 +172,89 @@ class TimerViewModel(
         record(LogLevel.WARN, "permission.denied", null, null, "permission" to "RECORD_AUDIO")
     }
 
+    /**
+     * True when a completed session is on screen and has not been saved, so
+     * starting a new session would discard it (US07). The screen then asks
+     * whether to save it, discard it, or cancel.
+     */
+    val needsSaveDecision: Boolean
+        get() = snapshot.state == TimerState.Completed && snapshot.session != null && !currentSessionSaved
+
+    /**
+     * Saves the completed session on screen when the person taps Save (US07),
+     * including a session with no shots. Does nothing if there is no completed
+     * session, it is already saved, or a save is in progress. After a
+     * successful save, [afterSaved] runs on the main thread (for "Save and
+     * start"); after a failure it does not, and the error is shown.
+     */
+    fun saveCurrentSession(afterSaved: () -> Unit = {}) {
+        val current = snapshot
+        val session = current.session
+        if (current.state != TimerState.Completed || session == null || currentSessionSaved || saving) return
+        saving = true
+        background.execute {
+            try {
+                repository.save(session)
+            } catch (e: Exception) {
+                record(
+                    LogLevel.ERROR, "session.save_failed", current.runId, session.id,
+                    "error" to e.javaClass.simpleName,
+                    diagnostics = mapOf("message" to e.message),
+                )
+                postToMain {
+                    saving = false
+                    errorMessage = "Could not save the session."
+                }
+                return@execute
+            }
+            record(LogLevel.INFO, "session.saved", current.runId, session.id, "shots" to session.shots.size)
+            loadHistory(current.runId)
+            postToMain {
+                saving = false
+                if (snapshot.session?.id == session.id) currentSessionSaved = true
+                afterSaved()
+            }
+        }
+    }
+
+    /** The person chose to start a new session without saving the completed one (US07). */
+    fun discardCurrentSession() {
+        if (!needsSaveDecision) return
+        val current = snapshot
+        record(
+            LogLevel.INFO, "session.discarded", current.runId, current.session?.id,
+            "shots" to current.session?.shots.orEmpty().size,
+        )
+    }
+
+    /**
+     * Permanently deletes the saved session with [id], after the person has
+     * confirmed (US07). [afterDeleted] runs on the main thread once it is gone;
+     * a failure is shown instead.
+     */
+    fun deleteSession(id: String, afterDeleted: () -> Unit = {}) {
+        background.execute {
+            try {
+                repository.delete(id)
+            } catch (e: Exception) {
+                record(
+                    LogLevel.ERROR, "session.delete_failed", null, id,
+                    "error" to e.javaClass.simpleName,
+                    diagnostics = mapOf("message" to e.message),
+                )
+                postToMain { errorMessage = "Could not delete the session." }
+                return@execute
+            }
+            record(LogLevel.INFO, "session.deleted", null, id)
+            loadHistory(runId = null)
+            postToMain {
+                // If it was the completed session still on screen, it is no longer saved.
+                if (snapshot.session?.id == id) currentSessionSaved = false
+                afterDeleted()
+            }
+        }
+    }
+
     private fun onSnapshot(latest: TimerSnapshot) {
         val justCompleted = latest.state == TimerState.Completed && lastState != TimerState.Completed
         val problem = latest.problem
@@ -172,7 +262,8 @@ class TimerViewModel(
         lastState = latest.state
         lastProblem = problem
         snapshot = latest
-        if (justCompleted) saveCompleted(latest.session, latest.runId)
+        // A newly completed session is not saved until the person taps Save (US07).
+        if (justCompleted) currentSessionSaved = false
     }
 
     private fun messageFor(problem: RunProblem): String = when (problem) {
@@ -180,30 +271,7 @@ class TimerViewModel(
             "The start beep could not be played, so the run was stopped before recording. " +
                 "Check the phone's volume and try again."
         RunProblem.MICROPHONE_LOST ->
-            "The microphone stopped working, so the run was ended. Any shots already recorded were kept."
-    }
-
-    /** A session with no shots is not worth keeping, so it is not saved. */
-    private fun saveCompleted(session: ShootingSession?, runId: String?) {
-        if (session == null || session.shots.isEmpty()) {
-            record(LogLevel.INFO, "session.not_saved", runId, session?.id, "reason" to "no_shots")
-            return
-        }
-        background.execute {
-            try {
-                repository.save(session)
-            } catch (e: Exception) {
-                record(
-                    LogLevel.ERROR, "session.save_failed", runId, session.id,
-                    "error" to e.javaClass.simpleName,
-                    diagnostics = mapOf("message" to e.message),
-                )
-                postToMain { errorMessage = "Could not save the session." }
-                return@execute
-            }
-            record(LogLevel.INFO, "session.saved", runId, session.id, "shots" to session.shots.size)
-            loadHistory(runId)
-        }
+            "The microphone stopped working, so the run was ended. Shots already recorded are still here; tap Save session to keep them."
     }
 
     private fun refreshHistory() {

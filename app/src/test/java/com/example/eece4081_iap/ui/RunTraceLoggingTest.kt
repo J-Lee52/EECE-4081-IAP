@@ -43,6 +43,9 @@ class RunTraceLoggingTest {
             if (failOnLoad) throw IOException("cannot read /data/user/0/app/files")
             return saved.toList()
         }
+        override fun delete(id: String) {
+            saved.removeAll { it.id == id }
+        }
     }
 
     private val log = CapturingEventLog()
@@ -92,6 +95,7 @@ class RunTraceLoggingTest {
         clock.advance(400.milliseconds)
         audio.emit(loud) // shot 2 at 1.65 s
         viewModel.stop()
+        viewModel.saveCurrentSession() // the person taps Save (US07)
 
         assertEquals(
             listOf(
@@ -148,7 +152,7 @@ class RunTraceLoggingTest {
         val stopped = log.only("run.stopped")
         assertEquals(0, stopped.data["shots"])
         assertEquals(12, stopped.data["buffersHeard"])
-        assertEquals(LogLevel.INFO, log.only("session.not_saved").level)
+        assertTrue("nothing is saved unless the person saves it", log.records.none { it.event == "session.saved" })
     }
 
     @Test
@@ -289,7 +293,8 @@ class RunTraceLoggingTest {
         assertEquals(RunProblem.MICROPHONE_LOST, engine.snapshot().problem)
         assertFalse(audio.started)
         assertEquals("microphone_lost", log.only("run.stopped").data["reason"])
-        assertEquals("the shot before the failure is saved", 1, repository.saved.single().shots.size)
+        viewModel.saveCurrentSession()
+        assertEquals("the shot before the failure is kept and can be saved", 1, repository.saved.single().shots.size)
         assertTrue(viewModel.errorMessage!!.contains("microphone stopped working"))
     }
 
@@ -357,6 +362,7 @@ class RunTraceLoggingTest {
         clock.advance(1.seconds)
         brokenAudio.emit(loud)
         viewModel.stop()
+        viewModel.saveCurrentSession()
 
         assertEquals(TimerState.Completed, engine.snapshot().state)
         assertEquals(1, store.saved.single().shots.size)
@@ -394,6 +400,7 @@ class RunTraceLoggingTest {
         repository.failOnLoad = true
 
         viewModel.stop()
+        viewModel.saveCurrentSession()
 
         assertEquals("the session itself was saved", 1, repository.saved.size)
         assertEquals(TimerState.Completed, viewModel.snapshot.state)
@@ -458,12 +465,41 @@ class RunTraceLoggingTest {
     }
 
     @Test
+    fun discardingAnUnsavedSession_isLoggedOnItsRunsTrace() {
+        startAndReachRecording()
+        clock.advance(1.seconds)
+        audio.emit(loud)
+        viewModel.stop()
+
+        viewModel.discardCurrentSession()
+
+        val discarded = log.only("session.discarded")
+        assertEquals("run-1", discarded.runId)
+        assertEquals("session-1", discarded.sessionId)
+        assertEquals(1, discarded.data["shots"])
+    }
+
+    @Test
+    fun deletingASavedSession_isLoggedWithItsSessionId() {
+        startAndReachRecording()
+        viewModel.stop()
+        viewModel.saveCurrentSession()
+
+        viewModel.deleteSession("session-1")
+
+        val deleted = log.only("session.deleted")
+        assertEquals(LogLevel.INFO, deleted.level)
+        assertEquals("session-1", deleted.sessionId)
+    }
+
+    @Test
     fun aFailedSave_isAnErrorCarryingBothIds() {
         repository.failOnSave = true
         startAndReachRecording()
         clock.advance(1.seconds)
         audio.emit(loud)
         viewModel.stop()
+        viewModel.saveCurrentSession()
 
         val failure = log.only("session.save_failed")
         assertEquals(LogLevel.ERROR, failure.level)

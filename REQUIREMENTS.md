@@ -103,11 +103,14 @@ so that I can look back at the results of previous sessions.
 
 #### Acceptance Criteria
 - After a session reaches the Completed state, the user can save the session.
+- A completed session can be saved even if no shots were recorded.
 - A saved session retains the recorded shots and their timing information.
 - The application provides a history view containing previously saved sessions.
 - The user can select a saved session from the history view to review its recorded results.
 - Reviewing a saved session does not modify its stored shot or timing information.
+- The user can delete a saved session. The application asks the user to confirm before deleting it, and a deleted session cannot be recovered.
 - Saved sessions remain available after the application is closed and reopened.
+- If the user starts a new session while the completed session has not been saved, the application asks whether to save it, discard it, or cancel starting the new session.
 
 ## Non-Functional Requirements
 
